@@ -1,0 +1,23 @@
+# add files you wish to ignore linting with eslint
+
+__unused
+
+node_modules
+
+dist
+openapi.json
+
+certs
+.credentials
+
+terraform
+
+coverage
+
+.vscode
+.eslintrc.js
+.prettierrc.js
+.prettierrc
+
+tsconfig.json
+tsconfig.build.json

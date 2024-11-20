@@ -1,0 +1,45 @@
+{
+  "semi": false,
+  "arrowParens": "always",
+  "trailingComma": "all",
+  "singleQuote": false,
+  "useTabs": false,
+  "tabWidth": 2,
+  "printWidth": 120,
+  "overrides": [
+    {
+      "files": "*.json",
+      "options": {
+        "parser": "json-stringify",
+        "trailingComma": "none",
+        "semi": true,
+        "tabWidth": 2,
+        "useTabs": false
+      }
+    },
+    {
+      "files": ["*.yml", "*.yaml", "*.toml"],
+      "options": {
+        "parser": "yaml-stringify",
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": "*.yaml",
+      "options": {
+        "parser": "yaml-stringify",
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": ["*.js", "*.ts", "*.jsx", "*.tsx"],
+      "options": {
+        "semi": false,
+        "tabWidth": 2,
+        "useTabs": false,
+        "singleQuote": false,
+        "trailingComma": "all"
+      }
+    }
+  ]
+}
