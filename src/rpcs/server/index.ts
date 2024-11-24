@@ -1,36 +1,68 @@
-import { RPCPlugins } from "../../interfaces/rpc.interface"
-import { ServerStatusResponse } from "./interfaces"
+import * as os from "os"
+import {
+  Extension,
+  ExtensionConfig,
+  ExtensionMetadata,
+  ExtensionStatus,
+  ExtensionMethod,
+} from "../../interfaces/extension.interface"
 
-export default class ServerPlugin implements RPCPlugins {
+import { SystemInfo, ProcessInfo } from "./interfaces"
+
+export default class ServerExtension implements Extension {
   name = "server"
-  version = "1.0"
-  private startTime: number
-  private tcpPort: number
-  private udpPort: number
-  private tcpConnections: number
-  private requestStats: {
-    tcp: number
-    udp: number
+  status: ExtensionStatus = "active" as const
+  config: ExtensionConfig = { enabled: true }
+  metadata: ExtensionMetadata = {
+    name: this.name,
+    version: "1.0.0",
+    description: "Server monitoring and management",
   }
 
-  constructor() {
-    this.startTime = Date.now()
-    this.tcpPort = Number(process.env.TCP_PORT) || 9101
-    this.udpPort = Number(process.env.UDP_PORT) || 9102
-    this.tcpConnections = 0
-    this.requestStats = { tcp: 0, udp: 0 }
-  }
+  private startTime = Date.now()
 
-  methods = {
-    status: (): ServerStatusResponse => {
+  methods: Record<string, ExtensionMethod> = {
+    system: async (): Promise<SystemInfo> => {
+      const cpus = os.cpus()
+      const totalMem = os.totalmem()
+      const freeMem = os.freemem()
+
       return {
-        status: "running",
+        hostname: os.hostname(),
+        platform: os.platform(),
+        arch: os.arch(),
+        cpus: cpus.map((cpu) => ({
+          model: cpu.model,
+          speed: cpu.speed,
+          times: cpu.times,
+        })),
+        memory: {
+          total: totalMem,
+          free: freeMem,
+          used: totalMem - freeMem,
+        },
+        uptime: os.uptime(),
+        loadavg: os.loadavg(),
+      }
+    },
+
+    process: async (): Promise<ProcessInfo> => {
+      const mem = process.memoryUsage()
+      const cpu = process.cpuUsage()
+
+      return {
+        pid: process.pid,
         uptime: Math.floor((Date.now() - this.startTime) / 1000),
-        tcpPort: this.tcpPort,
-        udpPort: this.udpPort,
-        tcpConnections: this.tcpConnections,
-        totalRequests: { ...this.requestStats },
-        timestamp: new Date().toISOString(),
+        memory: {
+          rss: mem.rss,
+          heapTotal: mem.heapTotal,
+          heapUsed: mem.heapUsed,
+          external: mem.external,
+        },
+        cpu: {
+          user: cpu.user,
+          system: cpu.system,
+        },
       }
     },
   }

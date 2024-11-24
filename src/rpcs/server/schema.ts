@@ -1,53 +1,66 @@
-export const schema = {
-  input: {
-    status: {},
-  },
-  output: {
-    status: {
-      status: {
+import { ExtensionSchema } from "../../interfaces/extension.interface"
+
+export const schema: ExtensionSchema = {
+  system: {
+    input: {},
+    output: {
+      hostname: {
         type: "string",
-        description: "Current server status",
+        description: "Server hostname",
+      },
+      platform: {
+        type: "string",
+        description: "Server platform",
+      },
+      arch: {
+        type: "string",
+        description: "Server architecture",
+      },
+      cpus: {
+        type: "array",
+        description: "CPU information",
+      },
+      memory: {
+        type: "object",
+        description: "Memory information",
       },
       uptime: {
         type: "number",
         description: "Server uptime in seconds",
       },
-      tcpPort: {
-        type: "number",
-        description: "TCP port number",
-      },
-      udpPort: {
-        type: "number",
-        description: "UDP port number",
-      },
-      tcpConnections: {
-        type: "number",
-        description: "Number of active TCP connections",
-      },
-      totalRequests: {
-        type: "object",
-        description: "Total number of requests processed",
-        properties: {
-          tcp: {
-            type: "number",
-            description: "Total TCP requests",
-          },
-          udp: {
-            type: "number",
-            description: "Total UDP requests",
-          },
-        },
-      },
-      timestamp: {
-        type: "string",
-        description: "Current server timestamp in ISO 8601 format",
+      loadavg: {
+        type: "array",
+        description: "Load average information",
       },
     },
+    example: {
+      shell: `echo '{"jsonrpc":"2.0","method":"server.system","params":{},"id":1}' | nc --tcp localhost 9101`,
+      node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: 'server.system', params: {}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
+    },
   },
-  example: {
-    status: {
-      shell: `echo '{"jsonrpc":"2.0","method":"server.status","params":{},"id":1}' | nc --tcp localhost 9101`,
-      node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: 'server.status', params: {}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
+  process: {
+    input: {},
+    output: {
+      pid: {
+        type: "number",
+        description: "Process ID",
+      },
+      uptime: {
+        type: "number",
+        description: "Process uptime in seconds",
+      },
+      memory: {
+        type: "object",
+        description: "Process memory usage",
+      },
+      cpu: {
+        type: "object",
+        description: "Process CPU usage",
+      },
+    },
+    example: {
+      shell: `echo '{"jsonrpc":"2.0","method":"server.process","params":{},"id":1}' | nc --tcp localhost 9101`,
+      node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: 'server.process', params: {}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
     },
   },
 }
