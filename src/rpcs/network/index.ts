@@ -1,12 +1,24 @@
-import { RPCPlugins } from "../../interfaces/rpc.interface"
+import {
+  Extension,
+  ExtensionConfig,
+  ExtensionMetadata,
+  ExtensionStatus,
+  ExtensionMethod,
+} from "../../interfaces/extension.interface"
 import { ValidatePortArguments, ValidatePortResponse } from "./interfaces"
 
-export default class NetworkPlugin implements RPCPlugins {
+export default class NetworkExtension implements Extension {
   name = "network"
-  version = "1.0"
+  status: ExtensionStatus = "active" as const
+  config: ExtensionConfig = { enabled: true }
+  metadata: ExtensionMetadata = {
+    name: this.name,
+    version: "1.0.0",
+    description: "Network utilities extension",
+  }
 
-  methods = {
-    validatePort: (params: ValidatePortArguments): ValidatePortResponse => {
+  methods: Record<string, ExtensionMethod> = {
+    validatePort: async (params: ValidatePortArguments): Promise<ValidatePortResponse> => {
       const { port, type } = params
 
       // Validate port number

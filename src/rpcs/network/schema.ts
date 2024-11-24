@@ -1,6 +1,8 @@
-export const schema = {
-  input: {
-    validatePort: {
+import { ExtensionSchema } from "../../interfaces/extension.interface"
+
+export const schema: ExtensionSchema = {
+  validatePort: {
+    input: {
       port: {
         type: "number",
         description: "Port number to validate",
@@ -11,9 +13,7 @@ export const schema = {
         description: "Type of port (TCP or UDP)",
       },
     },
-  },
-  output: {
-    validatePort: {
+    output: {
       valid: {
         type: "boolean",
         description: "Whether the port is valid",
@@ -28,9 +28,7 @@ export const schema = {
         description: "Type of port (TCP or UDP)",
       },
     },
-  },
-  example: {
-    validatePort: {
+    example: {
       shell: `echo '{"jsonrpc":"2.0","method":"network.validatePort","params":{"port":8080,"type":"TCP"},"id":1}' | nc --tcp localhost 9101`,
       node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: 'network.validatePort', params: {port: 8080, type: 'TCP'}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
     },
