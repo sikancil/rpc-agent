@@ -12,13 +12,17 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "removeComments": true
-    
-    // "module": "system",
-    // "baseUrl": ".",
-    // "outFile": "./dist/bundle.js",
-    // "moduleResolution": "node",
-    // "paths": { "*": ["node_modules/*"] }
+    "removeComments": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"],
+      "@/*": ["src/*"]
+    }
+  },
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "transpileOnly": true,
+    "files": true
   },
   "include": [ "src/**/*" ],
   "exclude": [
