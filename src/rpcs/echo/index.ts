@@ -1,34 +1,85 @@
-import { RPCPlugin } from "../../interfaces/plugin.interface"
-import { EchoArguments, EchoResponse } from "./interfaces"
-import { schema } from "./schema"
+import {
+  Extension,
+  ExtensionConfig,
+  ExtensionMetadata,
+  ExtensionStatus,
+  ExtensionMethod,
+} from "../../interfaces/extension.interface"
+import { ErrorService } from "../../services/error.service"
+import { EchoArguments, EchoResponse, PingResponse } from "./interfaces"
 
-export default class EchoPlugin implements RPCPlugin {
-  name = "echo"
-  version = "1.0"
-  schema = schema
+export default class EchoExtension implements Extension {
+  readonly name = "echo" as const
+  readonly status: ExtensionStatus = "active" as const
+  readonly config: ExtensionConfig = { enabled: true }
+  readonly metadata: ExtensionMetadata = {
+    name: this.name,
+    version: "1.0.0",
+    description: "Simple echo service for testing",
+  } as const
 
-  private validateParams(params: any): params is EchoArguments {
-    if (!params || typeof params !== "object") {
-      throw new Error("Invalid params: must be an object")
-    }
+  methods: Record<string, ExtensionMethod> = {
+    echo: async (params: EchoArguments): Promise<EchoResponse> => {
+      if (!this.config.enabled) {
+        throw ErrorService.serviceUnavailable("Extension is disabled", {
+          extension: this.name,
+          status: this.status,
+          source: "echo-extension",
+        })
+      }
 
-    if (!("message" in params)) {
-      throw new Error('Invalid params: missing required parameter "message"')
-    }
+      // Validate params type
+      if (params === null || typeof params !== "object") {
+        throw ErrorService.invalidParams("Invalid params: must be an object", undefined, {
+          receivedType: typeof params,
+          source: "echo-extension",
+        })
+      }
 
-    if (typeof params.message !== "string") {
-      throw new Error('Invalid params: "message" must be a string')
-    }
+      // Check for unknown parameters
+      const allowedParams = new Set(["message"])
+      const receivedParams = Object.keys(params)
+      const unknownParams = receivedParams.filter((param) => !allowedParams.has(param))
+      if (unknownParams.length > 0) {
+        throw ErrorService.invalidParams(
+          `Invalid params: unknown parameter(s) '${unknownParams.join(", ")}'`,
+          undefined,
+          {
+            unknownParams,
+            allowedParams: Array.from(allowedParams),
+            source: "echo-extension",
+          },
+        )
+      }
 
-    return true
-  }
+      // Validate message parameter
+      const { message } = params
+      if (typeof message !== "string") {
+        throw ErrorService.invalidParams("Invalid params: message must be a string", undefined, {
+          receivedType: typeof message,
+          source: "echo-extension",
+        })
+      }
 
-  methods = {
-    echo: (params: any): EchoResponse => {
-      // validateParams throws errors, no need to check return value
-      this.validateParams(params)
+      return {
+        message: `📣: ${message || ""}`,
+        timestamp: new Date().toISOString(),
+      }
+    },
 
-      return { message: `📣 Echoing: ${params.message}` }
+    ping: async (): Promise<PingResponse> => {
+      if (!this.config.enabled) {
+        throw ErrorService.serviceUnavailable("Extension is disabled", {
+          extension: this.name,
+          status: this.status,
+          source: "echo-extension",
+        })
+      }
+
+      return {
+        pong: true,
+        timestamp: new Date().toISOString(),
+      }
     },
   }
 }

@@ -1,7 +1,13 @@
 export interface EchoArguments {
-  message: string
+  message: string // Required field
 }
 
 export interface EchoResponse {
   message: string
+  timestamp: string
+}
+
+export interface PingResponse {
+  pong: true
+  timestamp: string
 }
