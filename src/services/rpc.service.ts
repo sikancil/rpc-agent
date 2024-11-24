@@ -1,580 +1,578 @@
-import * as net from "node:net"
-import * as dgram from "node:dgram"
-import * as fs from "node:fs"
-import * as path from "node:path"
-import { Buffer } from "node:buffer"
-import { inspect } from "node:util"
-import { parseJSON, stringifyJSON } from "../utils/json"
+import * as TCPServer from "node:net"
+import * as UDPServer from "node:dgram"
+import { createServer as createTCPServer } from "node:net"
+import { createSocket as createUDPServer } from "node:dgram"
 import { logger } from "../utils/logger"
-import { RPCPlugin, PluginRegistry, MethodSchema } from "../interfaces/plugin.interface"
-
-interface RPCRequest {
-  jsonrpc: string
-  method: string
-  params: GetMethodSchema["schema"]["input"]
-  id: string | number
-}
-
-interface RPCResponse {
-  jsonrpc: string
-  result?: any
-  error?: {
-    code: number
-    message: string
-    data?: any
-  }
-  id: string | number | null
-  _meta?: {
-    protocol: "tcp" | "udp"
-    timestamp: string
-    serverInfo?: {
-      uptime: number
-      connections: number
-    }
-  }
-}
-
-interface GetMethodSchema {
-  schema: MethodSchema
-  examples: {
-    shell: string
-    node: string
-  }
-}
-
-// Helper function for formatting debug output
-// function formatDebugOutput(data: any): string {
-//   if (["development", "test"].includes(process.env.NODE_ENV || "")) {
-//     return inspect(data, { colors: true, depth: null, breakLength: 80 })
-//   }
-//   return JSON.stringify(data)
-// }
-
-// Helper function to get method schema and example
-function getMethodSchema(plugin: RPCPlugin, methodName: string, tcpPort: number): GetMethodSchema | null {
-  const method = plugin.methods[methodName]
-  if (!method?.schema) return null
-
-  const schema = method.schema
-  const example = schema.example || {}
-
-  return {
-    schema,
-    examples: {
-      shell: `curl -X POST http://localhost:${tcpPort} -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"${plugin.name}.${methodName}","params":${JSON.stringify(example)}, "id":1}'`,
-      node: `const response = await fetch('http://localhost:${tcpPort}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', method: '${plugin.name}.${methodName}', params: ${JSON.stringify(example)}, id: 1 }) })`,
-    },
-  }
-}
+import { Extension } from "../interfaces/extension.interface"
+import { RpcRequest, RpcResponse } from "../interfaces/rpc.interface"
+import { loadExtensions } from "../utils/extension-loader"
+import { ErrorCode } from "../interfaces/error.interface"
+import { RpcError, ErrorService } from "./error.service"
+import { JSONValue } from "@/interfaces/common.interface"
+// import { validateParamsToSchema } from "../utils/schema"
+// import { DynamicSchema } from "@/interfaces/schema.interface"
 
 export class RPCService {
-  private readonly tcpPort: number
-  private readonly udpPort: number
-  private readonly plugins: PluginRegistry = {}
-  private tcpServer!: net.Server
-  private udpServer!: dgram.Socket
-  private startTime: number
-  private tcpConnections: Set<net.Socket>
-  private requestStats: {
-    tcp: number
-    udp: number
-  }
+  private tcpServer: TCPServer.Server | null = null
+  private udpServer: UDPServer.Socket | null = null
+  private extensions: Map<string, Extension> = new Map()
+  private initialized: boolean = false
 
   constructor(
-    tcpPort: number = Number(process.env.TCP_PORT) || 9101,
-    udpPort: number = Number(process.env.UDP_PORT) || 9102,
-  ) {
-    // Validate ports using NetworkPlugin
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const NetworkPlugin = require("../rpcs/network").default
-    const networkPlugin = new NetworkPlugin()
-    networkPlugin.methods.validatePort({ port: tcpPort, type: "TCP" })
-    networkPlugin.methods.validatePort({ port: udpPort, type: "UDP" })
+    private readonly tcpPort: number = 9101,
+    private readonly udpPort: number = 9102,
+    private readonly host: string = "127.0.0.1",
+  ) {}
 
-    if (tcpPort === udpPort) {
-      throw new Error(`TCP port (${tcpPort}) and UDP port (${udpPort}) cannot be the same`)
+  async initialize(): Promise<{ tcp: boolean; udp: boolean }> {
+    if (this.initialized) {
+      return { tcp: !!this.tcpServer, udp: !!this.udpServer }
     }
-
-    this.tcpPort = tcpPort
-    this.udpPort = udpPort
-    this.loadPlugins()
-    this.startTime = Date.now()
-    this.tcpConnections = new Set()
-    this.requestStats = { tcp: 0, udp: 0 }
-
-    logger.info("Initializing RPC Service", {
-      tcpPort: this.tcpPort,
-      udpPort: this.udpPort,
-      pid: process.pid,
-    })
-  }
-
-  // Initialize servers
-  async initialize(): Promise<[boolean, boolean]> {
-    return await Promise.all([this.setupTCPServer(), this.setupUDPServer()])
-  }
-
-  // Load all plugins from the rpcs directory
-  private loadPlugins(): void {
-    const pluginsDir = path.join(__dirname, "../rpcs")
 
     try {
-      const entries = fs.readdirSync(pluginsDir, { withFileTypes: true })
+      // Load extensions first
+      await this.loadExtensions()
 
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          try {
-            const pluginPath = path.join(pluginsDir, entry.name)
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { default: PluginClass } = require(pluginPath)
+      // Initialize servers
+      const [tcp, udp] = await Promise.all([this.initializeTCPServer(), this.initializeUDPServer()])
 
-            if (PluginClass) {
-              const plugin = new PluginClass() as RPCPlugin
-              this.registerPlugin(plugin)
-            }
-          } catch (error) {
-            logger.error(`Failed to load plugin: ${entry.name}`, {
-              error: (error as Error).message,
-            })
-          }
-        }
-      }
-
-      logger.info("Plugins loaded successfully", {
-        count: Object.keys(this.plugins).length,
-        plugins: Object.keys(this.plugins),
-      })
+      this.initialized = true
+      return { tcp, udp }
     } catch (error) {
-      logger.error("Failed to load plugins", {
-        error: (error as Error).message,
+      logger.error("Failed to initialize RPC service", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       })
+      await this.shutdown()
+      throw error
     }
   }
 
-  // Register a plugin
-  private registerPlugin(plugin: RPCPlugin): void {
-    if (this.plugins[plugin.name]) {
-      logger.warning(`Plugin ${plugin.name} already registered, overwriting`)
-    }
+  private async loadExtensions(): Promise<void> {
+    try {
+      const extensionsMap = await loadExtensions()
+      this.extensions = extensionsMap
 
-    this.plugins[plugin.name] = plugin
-
-    // Enhanced plugin registration logging with schema information
-    const methodSchemas = Object.keys(plugin.methods).map((methodName) => {
-      const methodInfo = getMethodSchema(plugin, methodName, this.tcpPort)
-      return {
-        name: methodName,
-        ...methodInfo,
+      // Initialize extensions manager
+      const extensionsManager = Array.from(this.extensions.values()).find((ext) => ext.name === "extensions")
+      if (extensionsManager && "setExtensions" in extensionsManager) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(extensionsManager as any).setExtensions(this.extensions)
       }
-    })
 
-    logger.debug(`Registered plugin: ${plugin.name}`, {
-      version: plugin.version,
-      methods: methodSchemas,
-      format: "detailed",
-    })
+      // Log loaded extensions
+      for (const [name, extension] of this.extensions) {
+        const methodCount = Object.keys(extension.methods).length
+        logger.info(`Loaded extension: ${name} with ${methodCount} methods`)
+      }
+
+      logger.info(`Successfully loaded ${this.extensions.size} extensions`)
+    } catch (error) {
+      logger.error("Failed to load extensions", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      // Don't throw error here, allow service to start without extensions
+      logger.warning("Service will start without extensions")
+    }
   }
 
-  // Handle RPC requests
-  private async handleRequest(request: RPCRequest, protocol: "tcp" | "udp"): Promise<RPCResponse> {
-    const startTime = process.hrtime()
-    const traceId = logger.startTrace("RPC Request", { protocol, request })
-    this.requestStats[protocol]++
+  private registerExtension(extension: Extension): number {
+    const { name, methods } = extension
 
-    const { jsonrpc, method, params, id } = request
-
-    if (jsonrpc !== "2.0") {
-      logger.warning("Invalid JSON-RPC version", {
-        traceId,
-        version: jsonrpc,
-        expected: "2.0",
-        format: "detailed",
-      })
-      return {
-        jsonrpc: "2.0",
-        error: {
-          code: -32600,
-          message: "Invalid Request",
-          data: { expected: "2.0", received: jsonrpc },
-        },
-        id,
-      }
+    if (!name || !methods || typeof methods !== "object") {
+      logger.warning(`Invalid extension format: ${name}`)
+      return 0
     }
 
-    // Parse method name in format: "plugin.method"
-    const [pluginName, methodName] = method.split(".")
+    if (this.extensions.has(name)) {
+      logger.warning(`Extension '${name}' is already registered`)
+      return 0
+    }
 
-    if (!pluginName || !methodName) {
-      logger.warning("Invalid method format", {
-        traceId,
+    this.extensions.set(name, extension)
+    let methodCount = 0
+
+    // Register each method
+    for (const [methodName, method] of Object.entries(methods)) {
+      if (typeof method !== "function") {
+        logger.warning(`Skipping invalid method ${name}.${methodName}: not a function`)
+        continue
+      }
+
+      const fullMethodName = `${name}.${methodName}`
+      logger.debug(`Registered RPC method: ${fullMethodName}`, {
+        extension: name,
+        method: methodName,
+        hasSchema: "schema" in method,
+      })
+      methodCount++
+    }
+
+    logger.info(`Registered extension: ${name} with ${methodCount} methods`)
+    return methodCount
+  }
+
+  private createErrorResponse(
+    id: string | number | null,
+    code: ErrorCode,
+    message: string,
+    details?: Record<string, JSONValue>,
+  ): RpcResponse {
+    const error = new RpcError({
+      message,
+      code,
+      details,
+      requestId: id,
+    })
+
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: error.toJSON(),
+    }
+  }
+
+  private async handleRequest(request: RpcRequest): Promise<RpcResponse> {
+    const { id, method, params = {} } = request
+    const traceId = logger.startTrace("Handling RPC request", { method, id })
+
+    try {
+      // Parse method name (format: extension.method)
+      const [extensionName, methodName] = method.split(".")
+      if (!extensionName || !methodName) {
+        throw ErrorService.invalidRequest("Invalid method format. Expected 'extension.method'")
+      }
+
+      // Get extension
+      const extension = this.extensions.get(extensionName)
+      if (!extension) {
+        throw ErrorService.extensionNotFound(`Extension '${extensionName}' not found`)
+      }
+
+      // Get method
+      const methodHandler = extension.methods[methodName]
+      if (!methodHandler) {
+        throw ErrorService.methodNotFound(`Method '${methodName}' not found in extension '${extensionName}'`)
+      }
+
+      // Validate method schema if it exists
+      // if ("schema" in methodHandler && methodHandler.schema) {
+      //   try {
+      //     await validateParamsToSchema(params, methodHandler.schema as DynamicSchema)
+      //   } catch (error) {
+      //     throw ErrorService.invalidParams(
+      //       error instanceof Error ? error.message : "Invalid parameters",
+      //       { schema: methodHandler.schema },
+      //     )
+      //   }
+      // }
+
+      // Execute method with timeout
+      const timeoutMs = 5000 // 5 seconds timeout
+      const result = await Promise.race([
+        methodHandler(params),
+        new Promise((_, reject) =>
+          setTimeout(() => {
+            reject(
+              ErrorService.requestTimeout("Request timeout", {
+                requestId: id,
+                method,
+                timeoutMs,
+              }),
+            )
+          }, timeoutMs),
+        ),
+      ])
+
+      logger.endTrace(traceId, "RPC request completed successfully", {
         method,
-        format: "detailed",
+        id,
+        result,
       })
+
       return {
         jsonrpc: "2.0",
-        error: {
-          code: -32601,
-          message: "Invalid method format. Expected: plugin.method",
-          data: { received: method },
-        },
         id,
+        result,
       }
-    }
-
-    const plugin = this.plugins[pluginName]
-    if (!plugin) {
-      logger.warning("Plugin not found", {
+    } catch (error) {
+      logger.error("Error handling RPC request", {
         traceId,
-        pluginName,
-        availablePlugins: Object.keys(this.plugins),
-        format: "detailed",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        method,
+        params,
       })
-      return {
-        jsonrpc: "2.0",
-        error: {
-          code: -32601,
-          message: "Plugin not found",
-          data: { availablePlugins: Object.keys(this.plugins) },
-        },
-        id,
-      }
-    }
 
-    const handler = plugin.methods[methodName]
-    if (!handler) {
-      logger.warning("Method not found in plugin", {
-        traceId,
-        pluginName,
-        methodName,
-        availableMethods: Object.keys(plugin.methods),
-        format: "detailed",
-      })
-      return {
-        jsonrpc: "2.0",
-        error: {
-          code: -32601,
-          message: "Method not found in plugin",
-          data: { availableMethods: Object.keys(plugin.methods) },
-        },
-        id,
-      }
-    }
-
-    // Validate parameters against schema
-    const schema = plugin.methods[methodName].schema?.input
-    if (schema) {
-      if (!params || typeof params !== "object") {
+      if (error instanceof RpcError) {
         return {
           jsonrpc: "2.0",
-          error: {
-            code: -32602,
-            message: "Invalid params: must be an object",
-            data: { received: params },
-          },
           id,
+          error: error.toJSON(),
         }
       }
 
-      // Check required parameters
-      for (const [paramName, paramSchema] of Object.entries(schema)) {
-        if (!("type" in paramSchema)) continue
-
-        if (!(paramName in params)) {
-          return {
-            jsonrpc: "2.0",
-            error: {
-              code: -32602,
-              message: `Invalid params: missing required parameter "${paramName}"`,
-              data: { schema, received: params },
-            },
-            id,
-          }
-        }
-
-        // Type validation
-        const paramValue = params[paramName]
-        const expectedType = paramSchema[paramName].type
-        const actualType = typeof paramValue
-
-        if (expectedType && actualType !== expectedType) {
-          return {
-            jsonrpc: "2.0",
-            error: {
-              code: -32602,
-              message: `Invalid params: "${paramName}" must be of type "${expectedType}"`,
-              data: { expected: expectedType, received: actualType },
-            },
-            id,
-          }
-        }
-      }
-    }
-
-    try {
-      logger.verbose("Executing method", {
-        traceId,
-        plugin: pluginName,
-        method: methodName,
-        params,
-        schema,
-        format: "detailed",
-      })
-
-      const result = await handler(params)
-
-      logger.endTrace(
-        traceId,
-        "RPC Request",
-        {
-          method,
-          id,
-          result,
-          format: "detailed",
-        },
-        startTime,
-      )
-
-      return {
-        jsonrpc: "2.0",
-        result,
-        id,
-        _meta: {
-          protocol,
-          timestamp: new Date().toISOString(),
-          serverInfo: {
-            uptime: Math.floor((Date.now() - this.startTime) / 1000),
-            connections: this.tcpConnections.size,
-          },
-        },
-      }
-    } catch (error) {
-      const err = error as Error & { cause?: unknown }
-      logger.error("Method execution failed", {
-        traceId,
+      // Convert unknown errors to internal error
+      const internalError = ErrorService.internalError(error instanceof Error ? error.message : "Unknown error", {
+        requestId: id,
         method,
-        error: err.message,
-        stack: err.stack,
-        params,
-        cause: err.cause || "Unknown cause",
-        format: "detailed",
       })
 
       return {
         jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: err.message,
-          data: { stack: err.stack },
-        },
         id,
+        error: internalError.toJSON(),
       }
     }
   }
 
-  // Setup TCP server
-  private setupTCPServer(): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      logger.info("Setting up TCP server", { port: this.tcpPort })
-
-      // Create TCP server
-      this.tcpServer = net.createServer((socket: net.Socket) => {
-        const clientInfo = `${socket.remoteAddress}:${socket.remotePort}`
-        this.tcpConnections.add(socket)
-
-        // Keep socket alive
-        socket.setKeepAlive(true, 60000) // 60 seconds
-        socket.setTimeout(0) // Disable timeout
-
-        logger.info("TCP client connected", {
-          client: clientInfo,
-          totalConnections: this.tcpConnections.size,
-        })
-
-        socket.on("data", async (data: Buffer) => {
-          try {
-            const request = parseJSON(data) as RPCRequest
-            logger.verbose("Received TCP request", {
-              client: clientInfo,
-              request,
-            })
-            const response = await this.handleRequest(request, "tcp")
-            socket.write(stringifyJSON(response) + "\n") // Add newline for better parsing
-            logger.verbose("Sent TCP response", { client: clientInfo, response })
-          } catch (error) {
-            logger.error("Failed to process TCP request", {
-              client: clientInfo,
-              error: (error as Error).message,
-              data: data.toString(),
-            })
-
-            const errorResponse: RPCResponse = {
-              jsonrpc: "2.0",
-              error: {
-                code: -32700,
-                message: "Parse error",
-                data: { received: data.toString() },
-              },
-              id: null,
-            }
-            socket.write(stringifyJSON(errorResponse) + "\n")
-          }
-        })
-
-        socket.on("close", () => {
-          this.tcpConnections.delete(socket)
-          logger.info("TCP client disconnected", {
-            client: clientInfo,
-            remainingConnections: this.tcpConnections.size,
-          })
-        })
-
-        socket.on("error", (err: Error) => {
-          logger.error("TCP client error", {
-            client: clientInfo,
-            error: err.message,
-            stack: err.stack,
-          })
-          this.tcpConnections.delete(socket)
-          socket.destroy()
-        })
-      })
-
-      // Handle server errors
-      this.tcpServer.on("error", (error: Error & { code?: string }) => {
-        if (error.code === "EADDRINUSE") {
-          logger.error("TCP port is already in use", {
-            port: this.tcpPort,
-            error: error.message,
-          })
-          reject(error)
-        } else {
-          logger.error("TCP server error", {
-            error: error.message,
-            stack: error.stack,
-          })
-        }
-      })
-
-      // Handle server close
-      this.tcpServer.on("close", () => {
-        logger.info("TCP server closed")
-      })
-
-      // Bind TCP server
-      this.tcpServer.listen(this.tcpPort, "0.0.0.0", () => {
-        logger.info("TCP server listening", {
-          port: this.tcpPort,
-          pid: process.pid,
-        })
-        resolve(true)
-      })
-    })
-  }
-
-  // Setup UDP server
-  private setupUDPServer(): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      logger.info("Setting up UDP server", { port: this.udpPort })
-      this.udpServer = dgram.createSocket("udp4")
-
-      // Handle server errors
-      this.udpServer.on("error", (error: Error & { code?: string }) => {
-        if (error.code === "EADDRINUSE") {
-          logger.error("UDP port is already in use", {
-            port: this.udpPort,
-            error: error.message,
-          })
-          reject(error)
-        } else {
-          logger.error("UDP server error", {
-            error: error.message,
-            stack: error.stack,
-          })
-        }
-      })
-
-      // Handle server listening
-      this.udpServer.on("listening", () => {
-        const address = this.udpServer.address()
-        logger.info("UDP server listening", {
-          port: address.port,
-          address: address.address,
-          pid: process.pid,
-        })
-      })
-
-      // Handle server close
-      this.udpServer.on("close", () => {
-        logger.info("UDP server closed")
-      })
-
-      // Handle incoming messages
-      this.udpServer.on("message", async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-        const clientInfo = `${rinfo.address}:${rinfo.port}`
-        this.requestStats.udp++
-        logger.debug("Received UDP message", { client: clientInfo })
-
-        try {
-          const request = parseJSON(data) as RPCRequest
-          logger.verbose("Processing UDP request", {
-            client: clientInfo,
-            request,
-          })
-          const response = await this.handleRequest(request, "udp")
-          const responseBuffer = Buffer.from(stringifyJSON(response) + "\n")
-          this.udpServer.send(responseBuffer.toString() as string, rinfo.port, rinfo.address)
-          logger.verbose("Sent UDP response", { client: clientInfo, response })
-        } catch (error) {
-          logger.error("Failed to process UDP request", {
-            client: clientInfo,
-            error: (error as Error).message,
-            data: data.toString(),
-          })
-
-          const errorResponse: RPCResponse = {
-            jsonrpc: "2.0",
-            error: {
-              code: -32700,
-              message: "Parse error",
-              data: { received: data.toString() },
-            },
-            id: null,
-          }
-          const responseBuffer = Buffer.from(stringifyJSON(errorResponse) + "\n")
-          this.udpServer.send(responseBuffer.toString() as string, rinfo.port, rinfo.address)
-        }
-      })
-
-      // Bind UDP server
-      this.udpServer.bind(this.udpPort, () => {
-        resolve(true)
-      })
-    })
-  }
-
-  // Graceful shutdown
-  public async shutdown(): Promise<void> {
-    logger.info("Initiating RPC service shutdown")
-
+  private async initializeTCPServer(): Promise<boolean> {
     return new Promise((resolve) => {
-      // Close all TCP connections
-      for (const socket of this.tcpConnections) {
-        socket.end()
-      }
+      try {
+        this.tcpServer = createTCPServer({
+          keepAlive: true,
+          noDelay: true,
+          allowHalfOpen: false,
+          pauseOnConnect: false,
+        })
 
-      // Close TCP server
-      this.tcpServer.close(() => {
-        logger.debug("TCP server closed")
+        // Handle server-level errors
+        this.tcpServer.on("error", (error) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((error as any).code === "EADDRINUSE") {
+            logger.error(`TCP port ${this.tcpPort} is already in use`, {
+              host: this.host,
+              port: this.tcpPort,
+            })
+          } else {
+            logger.error("TCP server error", {
+              host: this.host,
+              port: this.tcpPort,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
+          }
+          resolve(false)
+        })
 
-        // Close UDP server
-        this.udpServer.close(() => {
-          logger.info("RPC service shutdown complete", {
-            uptime: Math.floor((Date.now() - this.startTime) / 1000),
-            totalRequests: this.requestStats,
+        this.tcpServer.on("connection", (socket: TCPServer.Socket) => {
+          const clientId = `${socket.remoteAddress}:${socket.remotePort}`
+          logger.info("New TCP connection", { clientId })
+
+          // Set socket options
+          socket.setKeepAlive(true, 1000)
+          socket.setNoDelay(true)
+          socket.setTimeout(10000) // 30 second timeout
+
+          // Handle socket timeout
+          socket.on("timeout", () => {
+            logger.warning("TCP socket timeout", { clientId })
+            this.cleanupSocket(socket /* clientId */)
           })
+
+          let buffer = Buffer.alloc(0)
+          const maxBufferSize = 1024 * 1024 // 1MB limit
+
+          socket.on("data", async (data: Buffer) => {
+            const traceId = logger.startTrace("Received TCP data", {
+              clientId,
+              size: data.length,
+            })
+
+            let requestId: string | number | null = null
+            try {
+              buffer = Buffer.concat([buffer, data])
+
+              // Check buffer size limit
+              if (buffer.length > maxBufferSize) {
+                logger.error("TCP buffer size limit exceeded", {
+                  clientId,
+                  traceId,
+                  size: buffer.length,
+                })
+                const errorResponse = this.createErrorResponse(
+                  null,
+                  ErrorCode.SERVER_ERROR,
+                  "Buffer size limit exceeded",
+                  { size: buffer.length, maxSize: maxBufferSize },
+                )
+                this.sendTCPResponse(socket, errorResponse, clientId, traceId)
+                buffer = Buffer.alloc(0)
+                return
+              }
+
+              // Process complete messages
+              let newlineIndex
+              while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+                const messageStr = buffer.slice(0, newlineIndex).toString()
+                buffer = buffer.slice(newlineIndex + 1)
+
+                try {
+                  const request: RpcRequest = JSON.parse(messageStr)
+                  requestId = request.id ?? null
+
+                  // Handle request
+                  const response = await this.handleRequest(request)
+                  this.sendTCPResponse(socket, response, clientId, traceId)
+                } catch (error) {
+                  logger.error("Failed to handle TCP message", {
+                    clientId,
+                    traceId,
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    data: messageStr.substring(0, 1000), // Limit log size
+                  })
+
+                  const errorResponse = this.createErrorResponse(
+                    requestId,
+                    ErrorCode.PARSE_ERROR,
+                    error instanceof Error ? error.message : "Parse error",
+                    { data: messageStr.substring(0, 100) }, // Include partial data for debugging
+                  )
+                  this.sendTCPResponse(socket, errorResponse, clientId, traceId)
+                }
+              }
+            } catch (error) {
+              logger.error("TCP data processing error", {
+                clientId,
+                traceId,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              })
+
+              const errorResponse = this.createErrorResponse(
+                requestId,
+                error instanceof RpcError ? (error as RpcError).code : ErrorCode.INTERNAL_ERROR,
+                error instanceof Error ? error.message : "Internal error",
+                error instanceof RpcError ? (error as RpcError).details : undefined,
+              )
+              this.sendTCPResponse(socket, errorResponse, clientId, traceId)
+            } finally {
+              logger.endTrace(traceId, "TCP data processing completed", {
+                clientId,
+                size: data.length,
+              })
+            }
+          })
+
+          socket.on("error", (error) => {
+            // Only log if it's not a connection reset
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((error as any).code !== "ECONNRESET") {
+              logger.error("TCP socket error", {
+                clientId,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              })
+            }
+            this.cleanupSocket(socket)
+          })
+
+          socket.on("close", () => {
+            logger.info("TCP connection closed")
+            this.cleanupSocket(socket)
+          })
+        })
+
+        // Listen for connections
+        this.tcpServer.listen(this.tcpPort, this.host, () => {
+          logger.info(`TCP server listening on ${this.host}:${this.tcpPort}`)
+          resolve(true)
+        })
+      } catch (error) {
+        logger.error("Failed to initialize TCP server", {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        })
+        resolve(false)
+      }
+    })
+  }
+
+  private async initializeUDPServer(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      try {
+        this.udpServer = createUDPServer("udp4")
+
+        // Set socket options
+        this.udpServer.on("listening", () => {
+          const address = this.udpServer?.address()
+          logger.info("UDP server started", {
+            host: this.host,
+            port: this.udpPort,
+            server: address,
+          })
+          resolve(true)
+        })
+
+        // Handle server-level errors
+        this.udpServer.on("error", (error) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((error as any).code === "EADDRINUSE") {
+            logger.error(`UDP port ${this.udpPort} is already in use`, {
+              host: this.host,
+              port: this.udpPort,
+            })
+          } else {
+            logger.error("UDP server error", {
+              host: this.host,
+              port: this.udpPort,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
+          }
+          resolve(false)
+        })
+
+        this.udpServer.on("message", async (data: Buffer, rinfo: UDPServer.RemoteInfo) => {
+          const clientId = `${rinfo.address}:${rinfo.port}`
+          const traceId = logger.startTrace("Received UDP message", {
+            clientId,
+            size: data.length,
+          })
+
+          let requestId: string | number | null = null
+          try {
+            if (!this.udpServer) {
+              throw ErrorService.internalError("UDP server not initialized")
+            }
+
+            try {
+              const messageStr = data.toString().trim()
+              const request: RpcRequest = JSON.parse(messageStr)
+              requestId = request.id ?? null
+
+              // Handle request
+              const response = await this.handleRequest(request)
+              this.sendUDPResponse(response, rinfo, traceId)
+            } catch (error) {
+              logger.error("UDP message processing error", {
+                clientId,
+                traceId,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              })
+
+              const errorResponse = this.createErrorResponse(
+                requestId,
+                error instanceof RpcError ? error.code : ErrorCode.INTERNAL_ERROR,
+                error instanceof Error ? error.message : "Internal error",
+                error instanceof RpcError ? error.details : undefined,
+              )
+              this.sendUDPResponse(errorResponse, rinfo, traceId)
+            }
+          } catch (error) {
+            logger.error("UDP request handling error", {
+              clientId,
+              traceId,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            })
+          } finally {
+            logger.endTrace(traceId, "UDP message processing completed", {
+              clientId,
+              size: data.length,
+            })
+          }
+        })
+
+        // Bind server to host and port
+        this.udpServer.bind(this.udpPort, this.host)
+      } catch (error) {
+        logger.error("Failed to initialize UDP server", {
+          host: this.host,
+          port: this.udpPort,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        })
+        resolve(false)
+      }
+    })
+  }
+
+  private sendUDPResponse(response: RpcResponse, rinfo: UDPServer.RemoteInfo, traceId: string): void {
+    if (this.udpServer) {
+      const responseStr = JSON.stringify(response) + "\n"
+      this.udpServer.send(responseStr, rinfo.port, rinfo.address, (error) => {
+        if (error) {
+          logger.error("Failed to send UDP response", {
+            clientId: `${rinfo.address}:${rinfo.port}`,
+            traceId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+        } else {
+          logger.debug("UDP response sent successfully", {
+            clientId: `${rinfo.address}:${rinfo.port}`,
+            traceId,
+            size: responseStr.length,
+          })
+        }
+      })
+    }
+  }
+
+  private cleanupSocket(socket: TCPServer.Socket): void {
+    // Clean up any pending requests for this client
+    // for (const [queueId, { reject }] of this.requestQueue.entries()) {
+    //   if (queueId.startsWith(clientId)) {
+    //     reject(new Error("Connection closed"))
+    //     this.requestQueue.delete(queueId)
+    //   }
+    // }
+
+    if (!socket.destroyed) {
+      socket.end()
+      socket.destroy()
+    }
+  }
+
+  private sendTCPResponse(socket: TCPServer.Socket, response: RpcResponse, clientId: string, traceId: string): void {
+    if (!socket.destroyed) {
+      const responseStr = JSON.stringify(response) + "\n"
+      socket.write(responseStr, (error) => {
+        if (error) {
+          logger.error("Failed to send TCP response", {
+            clientId,
+            traceId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+        } else {
+          logger.debug("TCP response sent successfully", {
+            clientId,
+            traceId,
+            size: responseStr.length,
+          })
+        }
+      })
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    logger.info("Shutting down RPC service")
+
+    if (this.tcpServer) {
+      await new Promise<void>((resolve) => {
+        this.tcpServer?.close(() => {
+          logger.info("TCP server closed")
           resolve()
         })
       })
-    })
+    }
+
+    if (this.udpServer) {
+      await new Promise<void>((resolve) => {
+        this.udpServer?.close(() => {
+          logger.info("UDP server closed")
+          resolve()
+        })
+      })
+    }
+
+    this.initialized = false
+    this.tcpServer = null
+    this.udpServer = null
   }
 }
