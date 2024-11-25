@@ -5,8 +5,8 @@
 
 # Default configuration
 DEFAULT_HOST="127.0.0.1"
-DEFAULT_TCP_PORT=9101
-DEFAULT_UDP_PORT=9102
+DEFAULT_PORT_TCP=9101
+DEFAULT_PORT_UDP=9102
 DEFAULT_PROTOCOL="tcp"
 DEFAULT_TIMEOUT=5
 DEFAULT_DEBUG=false
@@ -14,14 +14,14 @@ DEFAULT_DEBUG=false
 # Initialize client configuration
 init_client() {
     local host=${1:-$DEFAULT_HOST}
-    local tcp_port=${2:-$DEFAULT_TCP_PORT}
-    local udp_port=${3:-$DEFAULT_UDP_PORT}
+    local tcp_port=${2:-$DEFAULT_PORT_TCP}
+    local udp_port=${3:-$DEFAULT_PORT_UDP}
     local protocol=${4:-$DEFAULT_PROTOCOL}
     local debug=${5:-$DEFAULT_DEBUG}
 
     export RPC_HOST=$host
-    export RPC_TCP_PORT=$tcp_port
-    export RPC_UDP_PORT=$udp_port
+    export RPC_PORT_TCP=$tcp_port
+    export RPC_PORT_UDP=$udp_port
     export RPC_PROTOCOL=$protocol
     export RPC_DEBUG=$debug
     export RPC_REQUEST_ID=1
@@ -29,8 +29,8 @@ init_client() {
     if [ "$RPC_DEBUG" = true ]; then
         echo "RPC Client initialized with:"
         echo "Host: $RPC_HOST"
-        echo "TCP Port: $RPC_TCP_PORT"
-        echo "UDP Port: $RPC_UDP_PORT"
+        echo "TCP Port: $RPC_PORT_TCP"
+        echo "UDP Port: $RPC_PORT_UDP"
         echo "Protocol: $RPC_PROTOCOL"
     fi
 }
@@ -76,7 +76,7 @@ send_tcp_request() {
     local request=$1
     local response
     
-    response=$(echo "$request" | nc -w "$DEFAULT_TIMEOUT" "$RPC_HOST" "$RPC_TCP_PORT")
+    response=$(echo "$request" | nc -w "$DEFAULT_TIMEOUT" "$RPC_HOST" "$RPC_PORT_TCP")
     if [ $? -ne 0 ]; then
         echo "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"TCP request failed\"},\"id\":$RPC_REQUEST_ID}"
         return 1
@@ -91,9 +91,9 @@ send_udp_request() {
     local response
     
     if command -v socat >/dev/null 2>&1; then
-        response=$(echo "$request" | socat -t "$DEFAULT_TIMEOUT" -T "$DEFAULT_TIMEOUT" STDIO "UDP4:$RPC_HOST:$RPC_UDP_PORT")
+        response=$(echo "$request" | socat -t "$DEFAULT_TIMEOUT" -T "$DEFAULT_TIMEOUT" STDIO "UDP4:$RPC_HOST:$RPC_PORT_UDP")
     else
-        response=$(echo "$request" | nc -u -w "$DEFAULT_TIMEOUT" "$RPC_HOST" "$RPC_UDP_PORT")
+        response=$(echo "$request" | nc -u -w "$DEFAULT_TIMEOUT" "$RPC_HOST" "$RPC_PORT_UDP")
     fi
     
     if [ $? -ne 0 ]; then
@@ -140,5 +140,5 @@ validate_port() {
 # Close client (cleanup if needed)
 close_client() {
     debug_log "Closing RPC client"
-    unset RPC_HOST RPC_TCP_PORT RPC_UDP_PORT RPC_PROTOCOL RPC_DEBUG RPC_REQUEST_ID
+    unset RPC_HOST RPC_PORT_TCP RPC_PORT_UDP RPC_PROTOCOL RPC_DEBUG RPC_REQUEST_ID
 }

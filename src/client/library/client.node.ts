@@ -219,7 +219,7 @@ export class RpcClient {
     }
   }
 
-  protected async sendRequest<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  async send<T>(method: string, params: Record<string, unknown>): Promise<T> {
     if (this.config.protocol === "tcp") {
       return this.sendTcpRequest<T>(method, params)
     } else if (this.config.protocol === "udp") {
@@ -301,23 +301,23 @@ export class AgentLibrary extends RpcClient {
   }
 
   async getServerInfo(): Promise<SystemInfo> {
-    return this.sendRequest<SystemInfo>("server.system", {})
+    return this.send<SystemInfo>("server.system", {})
   }
 
   async listExtensions(): Promise<ExtensionStatus[]> {
-    const extensions = await this.sendRequest<ExtensionStatus[]>("extensions.list", {})
+    const extensions = await this.send<ExtensionStatus[]>("extensions.list", {})
     return extensions || []
   }
 
   async validatePort(port: number, type: "TCP" | "UDP"): Promise<PortValidationResult> {
-    return this.sendRequest<PortValidationResult>("network.validatePort", { port, type })
+    return this.send<PortValidationResult>("network.validatePort", { port, type })
   }
 
   async echo(message: string): Promise<EchoResponse> {
-    return this.sendRequest<EchoResponse>("echo.echo", { message })
+    return this.send<EchoResponse>("echo.echo", { message })
   }
 
   async getCurrentDate(): Promise<DateInfo> {
-    return this.sendRequest<DateInfo>("date.now", {})
+    return this.send<DateInfo>("date.now", {})
   }
 }
