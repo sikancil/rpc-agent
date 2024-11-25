@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Ensure we're in the project root
+cd "$(dirname "$0")"
+
+# Update version
+echo "Updating version..."
+echo "------------------------------"
+if ! npm version patch; then
+    echo ""
+    echo -e "\033[0;31m ❌ Failed to update version\033[0m" >&2
+    exit 1
+fi
+
+echo -e "\033[0;32m ✅ Version updated successfully\033[0m"
+echo ""
+
+# Build project
+echo "Building project..."
+echo "------------------------------"
+if ! npm run build; then
+    echo ""
+    echo -e "\033[0;31m ❌ Failed to build the project\033[0m" >&2
+    exit 1
+fi
+
+echo -e "\033[0;32m 🏗️  Project built successfully\033[0m"
+echo ""
+
+# Publish
+echo "Publishing to npm..."
+echo "------------------------------"
+if ! npm publish --access public; then
+    echo ""
+    echo -e "\033[0;31m ❌ Failed to publish to npm\033[0m" >&2
+    exit 1
+fi
+
+echo -e "\033[0;32m 🚀 Published to npm successfully\033[0m"
+echo ""

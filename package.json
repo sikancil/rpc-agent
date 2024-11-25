@@ -1,13 +1,12 @@
 {
-  "name": "@arifwidianto/i-agent",
+  "name": "@arifwidianto/rpc-agent",
   "version": "1.0.0",
-  "description": "Instance Agent services",
+  "description": "RPC Agent for both client and server, extends more methods easily",
   "main": "dist/index.js",
-  "bin": {
-    "tsp": "dist/index.js"
-  },
+  "files": [
+    "dist/*"
+  ],
   "scripts": {
-    "chmod:bin": "chmod-cli ./dist/index.js -m 0o755",
     "build": "rimraf ./dist ; npm run precommit ; tsc",
     "start": "node dist/index.js",
     "dev": "npm run precommit ; ts-node --require tsconfig-paths/register src/index.ts",
@@ -25,34 +24,30 @@
     "lint": "eslint \"src/**/*.ts\"",
     "precommit": "npm run format ; npm run lint",
     "prepack": "npm run build",
-    "postbuild": "npm run chmod:bin",
-    "postinstall-x": "npm run build"
+    "postbuild": "echo \"🎉 Build successful!\"",
+    "postinstall": "npm run build"
   },
   "keywords": [
     "typescript",
     "cli",
     "devops",
-    "agent"
+    "agent",
+    "json-rpc",
+    "rpc-server",
+    "rpc-client",
+    "microservice"
   ],
   "author": "ArifWidianto <https://github.com/sikancil>",
   "license": "MIT",
   "dependencies": {
-    "@types/inquirer": "^9.0.7",
     "@types/node": "^22.9.1",
-    "@types/semver": "^7.5.8",
-    "axios": "^1.6.7",
-    "chalk": "^4.1.2",
-    "chmod-cli": "^2.0.1",
-    "inquirer": "^8.2.6",
-    "ora": "^5.4.1",
-    "semver": "^7.5.4",
     "typescript": "5.3.2"
   },
   "devDependencies": {
+    "@types/node": "^22.9.1",
     "@types/jest": "^29.5.14",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
-    "cross-env": "^7.0.3",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
