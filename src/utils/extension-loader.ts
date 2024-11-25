@@ -1,29 +1,47 @@
-import * as fs from "node:fs/promises"
+import fs, { promises as fsPromises } from "node:fs"
 import * as path from "node:path"
 import { Extension } from "../interfaces/extension.interface"
 import { logger } from "./logger"
 
-export async function loadExtensions(): Promise<Map<string, Extension>> {
+export async function loadExtensions(extensionPath: string | undefined = undefined): Promise<Map<string, Extension>> {
   const extensions: Map<string, Extension> = new Map()
   // Use src/rpcs in development mode with ts-node, dist/rpcs in production
   const isDevelopment = process.argv.some((arg) => arg.includes("ts-node"))
-  const extensionsDir = path.join(process.cwd(), isDevelopment ? "src" : "dist", "rpcs")
-  logger.debug(`Loading extensions from ${extensionsDir}`, { isDevelopment })
+  const extensionsDirBase = path.join(process.cwd(), isDevelopment ? "src" : "dist", "rpcs")
+  const extensionsDirUser = extensionPath ? path.join(process.cwd(), extensionPath || "rpcs") : undefined
+  logger.debug(`Loading extensions from ${extensionsDirBase}`, { isDevelopment })
+  logger.debug(`Loading extensions from ${extensionsDirUser}`, { isDevelopment })
 
   try {
-    const entries = await fs.readdir(extensionsDir, { withFileTypes: true })
+    const entriesBase = await fsPromises.readdir(extensionsDirBase, { withFileTypes: true })
+    const entriesUser = extensionsDirUser ? await fsPromises.readdir(extensionsDirUser, { withFileTypes: true }) : []
+    const entries = [
+      ...entriesBase, //.map((entry) => path.join(extensionsDirBase, entry.name)),
+      ...entriesUser, //.map((entry) => path.join(extensionsDirUser, entry.name)),
+    ]
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
 
-      const extensionPath = path.join(extensionsDir, entry.name)
-      // Use .ts extension in development mode, .js in production
-      const indexFile = path.join(extensionPath, `index${isDevelopment ? ".ts" : ".js"}`)
+      // const extensionPath = path.join(extensionsDirBase, entry.name)
+      const extensionPath = entriesBase.find((e) => e.name === entry.name)?.name
+        ? path.join(extensionsDirBase, entry.name)
+        : extensionsDirUser
+          ? path.join(extensionsDirUser, entry.name)
+          : undefined
+
+      // Use .ts extension during development mode, .js for built mode
+      const indexFile = extensionPath ? path.join(extensionPath, `index${isDevelopment ? ".ts" : ".js"}`) : undefined
       logger.debug(`Checking extension file: ${indexFile}`)
+
+      if (!indexFile || !fs.existsSync(indexFile)) {
+        logger.warning(`No index file found in extension: ${entry.name}`)
+        continue
+      }
 
       try {
         // Check if the index file exists
-        await fs.access(indexFile)
+        await fsPromises.access(indexFile)
 
         // Import the extension class
         let ExtensionModule
@@ -84,7 +102,7 @@ export async function loadExtensions(): Promise<Map<string, Extension>> {
     logger.error("Failed to read extensions directory:", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      path: extensionsDir,
+      paths: { base: extensionsDirBase, user: extensionsDirUser },
     })
     return new Map()
   }

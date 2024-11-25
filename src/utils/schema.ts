@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DynamicSchema, SchemaMethod } from "@/interfaces/schema.interface"
+import { DynamicSchema, SchemaMethod } from "../interfaces/schema.interface"
 
 export function validateSchema(schema: unknown): schema is DynamicSchema {
   if (typeof schema !== "object" || schema === null) return false
@@ -89,11 +89,3 @@ export function validateParamsToSchema(params: Record<string, unknown>, schema: 
   }
   return false
 }
-
-// Example usage
-// if (validateSchema(schema)) {
-//   // schema is valid, use it
-//   console.log("Schema is valid!");
-// } else {
-//   console.error("Schema is invalid!");
-// }

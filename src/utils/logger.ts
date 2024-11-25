@@ -124,6 +124,6 @@ export class Logger {
 
 // Export singleton instance
 export const logger = new Logger(
-  (process.env.DEBUG_LEVEL as LogLevel) || (process.env.LOG_LEVEL as LogLevel) || LogLevel.VERBOSE,
+  (process.env.LOG_LEVEL as LogLevel) || (process.env.LOG_LEVEL as LogLevel) || LogLevel.VERBOSE,
   (process.env.LOG_FORMAT as "simple" | "detailed") || "detailed",
 )
