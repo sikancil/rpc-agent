@@ -7,25 +7,20 @@ export type JSONObject = { [key: string]: JSONValue }
 
 export type JSONValue = string | number | boolean | null | undefined | JSONValue[] | { [key: string]: JSONValue }
 
-export interface MethodDoc {
-  name: string
-  description: string
-  parameters?: Record<string, ParameterSchema>
-  returns?: {
-    type: string
-    description: string
-  }
+export enum Protocol {
+  TCP = "tcp",
+  UDP = "udp",
+  // HTTP = "http",
+  // WEBSOCKET = "ws",
 }
 
-export interface ParameterSchema {
-  type: string
-  description: string
-  required: boolean
-  default?: JSONValue
+export interface ProtocolConfig {
+  protocolType: Protocol
+  host: string
+  port: number
+  timeout?: number
 }
 
-export interface RpcError {
-  code: number
-  message: string
-  data?: unknown
+export interface CreateAgentOptions {
+  protocols: ProtocolConfig[]
 }
