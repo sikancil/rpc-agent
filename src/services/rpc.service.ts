@@ -2,15 +2,13 @@ import * as TCPServer from "node:net"
 import * as UDPServer from "node:dgram"
 import { createServer as createTCPServer } from "node:net"
 import { createSocket as createUDPServer } from "node:dgram"
-import { logger } from "../utils/logger"
+import { JSONValue } from "../interfaces/common.interface"
 import { Extension } from "../interfaces/extension.interface"
 import { RpcRequest, RpcResponse } from "../interfaces/rpc.interface"
+import { logger } from "../utils/logger"
 import { loadExtensions } from "../utils/extension-loader"
 import { ErrorCode } from "../interfaces/error.interface"
 import { RpcError, ErrorService } from "./error.service"
-import { JSONValue } from "@/interfaces/common.interface"
-// import { validateParamsToSchema } from "../utils/schema"
-// import { DynamicSchema } from "@/interfaces/schema.interface"
 
 export class RPCService {
   private tcpServer: TCPServer.Server | null = null
@@ -19,6 +17,7 @@ export class RPCService {
   private initialized: boolean = false
 
   constructor(
+    private readonly extensionPath: string | undefined,
     private readonly tcpPort: number = 9101,
     private readonly udpPort: number = 9102,
     private readonly host: string = "127.0.0.1",
@@ -50,7 +49,7 @@ export class RPCService {
 
   private async loadExtensions(): Promise<void> {
     try {
-      const extensionsMap = await loadExtensions()
+      const extensionsMap = await loadExtensions(this.extensionPath)
       this.extensions = extensionsMap
 
       // Initialize extensions manager

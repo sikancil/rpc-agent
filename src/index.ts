@@ -1,18 +1,26 @@
 import { RPCService } from "./services/rpc.service"
+import { RpcClient } from "./client/library/client.node"
 import { logger } from "./utils/logger"
+import { RpcClientConfig } from "./client/library/interfaces"
+
+export { RpcClientConfig } from "./client/library/interfaces"
 
 class AgentService {
   private rpcService: RPCService
   private isShuttingDown: boolean = false
 
-  constructor() {
-    const tcpPort = Number(process.env.TCP_PORT) || 9101
-    const udpPort = Number(process.env.UDP_PORT) || 9102
+  public readonly extensionPath: string | undefined
 
-    logger.info("Starting RPC Agent Service", { tcpPort, udpPort })
+  constructor(extensionPath: string | undefined = undefined, tcpPort?: number, udpPort?: number) {
+    this.extensionPath = extensionPath
+
+    const _tcpPort = Number(process.env.PORT_TCP) || tcpPort || 9101
+    const _udpPort = Number(process.env.PORT_UDP) || udpPort || 9102
+
+    logger.info("Starting RPC Agent Service", { tcpPort: _tcpPort, udpPort: _udpPort })
 
     // Initialize RPC service
-    this.rpcService = new RPCService(tcpPort, udpPort)
+    this.rpcService = new RPCService(this.extensionPath, _tcpPort, _udpPort)
     this.setupSignalHandlers()
   }
 
@@ -22,7 +30,7 @@ class AgentService {
     logger.info("Signal handlers initialized")
   }
 
-  async initialize(): Promise<{ tcp: boolean; udp: boolean }> {
+  async start(): Promise<{ tcp: boolean; udp: boolean }> {
     try {
       // Initialize RPC service (includes extension loading)
       const { tcp, udp } = await this.rpcService.initialize()
@@ -67,24 +75,48 @@ class AgentService {
   }
 }
 
-// Export for testing
-export { AgentService }
+class AgentClient {
+  public readonly client: RpcClient
 
-export async function listen(): Promise<void> {
-  try {
-    const service = new AgentService()
-    await service.initialize()
-  } catch (error) {
-    logger.error("Failed to start RPC Agent Service", {
-      error: (error as Error).message,
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-    process.exit(1)
+  constructor(config: RpcClientConfig, debug: boolean = false) {
+    this.client = new RpcClient(config, debug)
+  }
+
+  async init(): Promise<void> {
+    await this.client.init()
+  }
+
+  send<T>(method: string, params: Record<string, unknown>): Promise<T> {
+    return this.client.send(method, params)
+  }
+
+  close(): void {
+    this.client.close()
   }
 }
 
+// Export for testing
+export { AgentService, AgentClient }
+
 // If executed directly, run the service
 if (require.main === module) {
+  async function listen(extensionsPath: string | undefined = undefined): Promise<void> {
+    try {
+      const service = new AgentService(
+        extensionsPath,
+        Number(process.env.PORT_TCP || "9101") || 9101,
+        Number(process.env.PORT_UDP || "9102") || 9102,
+      )
+      await service.start()
+    } catch (error) {
+      logger.error("Failed to start RPC Agent Service", {
+        error: (error as Error).message,
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      process.exit(1)
+    }
+  }
+
   listen().catch((error: unknown) => {
     logger.error("Unhandled error in main", {
       error: error instanceof Error ? error.message : String(error),
