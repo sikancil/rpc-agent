@@ -4,11 +4,22 @@ import * as fs from "node:fs"
 import * as ts from "typescript"
 import { ExtensionSchema, SchemaMethod } from "../interfaces"
 
+/**
+ * Schema Generator for RPC Extensions
+ * Generates TypeScript schema files for RPC methods to enable type safety and documentation
+ *
+ * @class SchemaGenerator
+ * @description
+ * This class analyzes TypeScript source files to generate schema definitions for RPC methods.
+ * It extracts method signatures, parameters, and return types to create comprehensive schema files.
+ *
+ * @example
+ * const generator = new SchemaGenerator()
+ * await generator.generateSchema('./src/rpcs/my-extension/index.ts')
+ */
 export class SchemaGenerator {
   private sourceFile: ts.SourceFile | undefined
   private program: ts.Program | undefined
-
-  constructor() {}
 
   /**
    * Initialize the TypeScript program and source file
@@ -33,8 +44,25 @@ export class SchemaGenerator {
   }
 
   /**
-   * Generate schema for the extension
-   * @param entryPointPath Path to the extension's entry point file
+   * Generates schema for an extension
+   * @param entryPointPath - Path to the extension's index.ts file
+   * @returns Promise<void>
+   *
+   * @workflow
+   * 1. Read and parse TypeScript source
+   * 2. Extract method information
+   * 3. Generate schema content
+   * 4. Write schema file
+   *
+   * @integration
+   * - Works with Extension interface implementations
+   * - Creates schema.ts in same directory as source
+   * - Supports method parameter and return type extraction
+   *
+   * @tips
+   * - Ensure source file has proper TypeScript annotations
+   * - Method parameters should be properly typed
+   * - Return types should be explicitly defined
    */
   public generateSchema(entryPointPath: string): void {
     this.initialize(entryPointPath)
@@ -58,6 +86,7 @@ export class SchemaGenerator {
     // Generate schema file content
     const schemaPath = path.join(path.dirname(entryPointPath), "schema.ts")
     const schemaContent = this.generateSchemaFileContent(schema)
+    console.log(`Writing schema to ${schemaPath}`)
     fs.writeFileSync(schemaPath, schemaContent)
   }
 
@@ -65,6 +94,18 @@ export class SchemaGenerator {
    * Process class methods to extract schema information
    * @param classNode Class declaration node
    * @param schema Schema object to populate
+   *
+   * @complexity
+   * This method uses TypeScript's AST (Abstract Syntax Tree) to:
+   * 1. Find class declarations
+   * 2. Extract method signatures
+   * 3. Parse parameter types
+   * 4. Generate example usage
+   *
+   * @tips
+   * - Methods must be properly typed
+   * - Parameter destructuring is supported
+   * - Async methods are handled automatically
    */
   private processClassMethods(classNode: ts.ClassDeclaration, schema: ExtensionSchema): void {
     console.log("Processing class:", classNode.name?.text)
@@ -113,7 +154,7 @@ export class SchemaGenerator {
                       node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: '${methodName}', params: {}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
                     },
                   }
-                  console.log("Method schema:", JSON.stringify(methodSchema, null, 2))
+                  console.log("Method schema:", Object.keys(methodSchema).join(", "))
                   schema[methodName] = methodSchema
                 } else {
                   console.log("No signature found for method:", methodName)
@@ -145,7 +186,7 @@ export class SchemaGenerator {
                     node: `node -e "const net = require('net'); const client = new net.Socket(); client.connect(9101, 'localhost', () => { client.write(JSON.stringify({jsonrpc: '2.0', method: '${methodName}', params: {}, id: Date.now()}) + '\\n'); }); client.on('data', (data) => { console.log(data.toString()); client.destroy(); });"`,
                   },
                 }
-                console.log("Method schema:", JSON.stringify(methodSchema, null, 2))
+                console.log("Method schema:", Object.keys(methodSchema).join(", "))
                 schema[methodName] = methodSchema
               } else {
                 console.log("No signature found for method:", methodName)
@@ -161,7 +202,19 @@ export class SchemaGenerator {
    * Extract input schema from method definition
    * @param signature Method signature
    * @param methodNode Method node
-   * @returns Input schema object
+   * @returns Object containing parameter type information
+   *
+   * @complexity
+   * Handles complex TypeScript types including:
+   * - Interface types
+   * - Union types
+   * - Intersection types
+   * - Generic types
+   *
+   * @tips
+   * - Use simple types when possible
+   * - Document complex types with interfaces
+   * - Avoid 'any' type usage
    */
   private extractMethodInputSchema(signature: ts.Signature, methodNode: ts.Node): Record<string, any> {
     const typeChecker = this.program!.getTypeChecker()
@@ -194,7 +247,19 @@ export class SchemaGenerator {
    * Extract output schema from method definition
    * @param signature Method signature
    * @param methodNode Method node
-   * @returns Output schema object
+   * @returns Object containing return type information
+   *
+   * @complexity
+   * Handles complex TypeScript types including:
+   * - Interface types
+   * - Union types
+   * - Intersection types
+   * - Generic types
+   *
+   * @tips
+   * - Use simple types when possible
+   * - Document complex types with interfaces
+   * - Avoid 'any' type usage
    */
   private extractMethodOutputSchema(signature: ts.Signature, methodNode: ts.Node): Record<string, any> {
     const typeChecker = this.program!.getTypeChecker()
@@ -229,6 +294,18 @@ export class SchemaGenerator {
    * Map TypeScript types to schema types
    * @param tsType TypeScript type string
    * @returns Schema type string
+   *
+   * @complexity
+   * Handles mapping of:
+   * - Primitive types
+   * - Object types
+   * - Array types
+   * - Enum types
+   *
+   * @tips
+   * - Use consistent type naming
+   * - Avoid using 'any' type
+   * - Document complex types
    */
   private mapTypeScriptTypeToSchemaType(tsType: string): string {
     const cleanType = tsType.toLowerCase().trim()
@@ -242,9 +319,20 @@ export class SchemaGenerator {
   }
 
   /**
-   * Generate schema file content in TypeScript format
+   * Generate schema file content
    * @param schema The schema object
-   * @returns TypeScript formatted schema content
+   * @returns string - Generated TypeScript code
+   *
+   * @workflow
+   * 1. Format schema object
+   * 2. Generate TypeScript imports
+   * 3. Create schema constant
+   * 4. Format code with proper indentation
+   *
+   * @tips
+   * - Schema is formatted for readability
+   * - Imports are automatically managed
+   * - Code style matches project conventions
    */
   private generateSchemaFileContent(schema: ExtensionSchema): string {
     const formatValue = (value: any, indent: number = 2): string => {
