@@ -1,9 +1,8 @@
-import { RPCService } from "./services/rpc.service"
-import { RpcClient } from "./client/library/client.node"
 import { logger } from "./utils/logger"
-import { RpcClientConfig } from "./client/library/interfaces"
+import { RPCService } from "./services/rpc.service"
 
-export { RpcClientConfig } from "./client/library/interfaces"
+export * from "./services/rpc.service"
+export * from "./interfaces"
 
 class AgentService {
   private rpcService: RPCService
@@ -74,6 +73,11 @@ class AgentService {
     }
   }
 }
+
+import { RpcClient } from "./client/library/client.node"
+import { RpcClientConfig } from "./client/library/interfaces"
+export * from "./client/library/client.node"
+export * from "./client/library/interfaces"
 
 class AgentClient {
   public readonly client: RpcClient
