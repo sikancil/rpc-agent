@@ -14,7 +14,7 @@
     "build": "rimraf ./dist ; npm run precommit ; tsc",
     "start": "node dist/index.js",
     "dev": "npm run precommit ; ts-node --require tsconfig-paths/register src/index.ts",
-    "cli": "npm run precommit ; ts-node --require tsconfig-paths/register src/cli.ts",
+    "dev:cli": "npm run precommit ; ts-node --require tsconfig-paths/register src/cli.ts",
     "ensure:release:dir": "mkdir -p ./releases/$(node -p \"require('./package.json').version\")",
     "deno:compile:linux-x64": "npm run ensure:release:dir ; deno compile --unstable-sloppy-imports -A -o \"./releases/$(node -p \"require('./package.json').version\")/i-agent-linux-x64\" --target x86_64-unknown-linux-gnu src/index.ts",
     "deno:compile:linux-arm64": "npm run ensure:release:dir ; deno compile --unstable-sloppy-imports -A -o \"./releases/$(node -p \"require('./package.json').version\")/i-agent-linux-arm64\" --target aarch64-unknown-linux-gnu src/index.ts",
