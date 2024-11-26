@@ -1,4 +1,4 @@
-import { ExtensionSchema } from "../../interfaces/extension.interface"
+import { ExtensionSchema } from "../../interfaces"
 
 export const schema: ExtensionSchema = {
   validatePort: {
