@@ -788,7 +788,7 @@ export class RPCService {
             _to = undefined
             resolve(true)
           }
-          
+
           _n++
           if (_n >= 5) {
             clearTimeout(_to)
