@@ -1,6 +1,6 @@
 {
   "name": "@arifwidianto/rpc-agent",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "RPC Agent for both client and server, extends more methods easily",
   "main": "dist/index.js",
   "files": [
