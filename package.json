@@ -23,9 +23,9 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.ts\"",
     "precommit": "npm run format ; npm run lint",
-    "prepack": "npm run build",
-    "postbuild": "echo \"🎉 Build successful!\"",
-    "postinstall": "npm run build"
+    "x-prepack": "npm run build",
+    "x-postinstall": "npm run build",
+    "postbuild": "echo \"🎉 Build successful!\""
   },
   "keywords": [
     "typescript",
