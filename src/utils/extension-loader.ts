@@ -1,8 +1,35 @@
+/**
+ * Extension Loader - Dynamic RPC extension loading utility
+ * @packageDocumentation
+ */
+
 import fs, { promises as fsPromises } from "node:fs"
 import * as path from "node:path"
 import { logger } from "./logger"
 import { Extension } from "../interfaces"
 
+/**
+ * Load extensions from a directory
+ * @param extensionPath - Path to extensions directory
+ * @returns Promise<Map<string, Extension>> - Map of loaded extensions
+ *
+ * @workflow
+ * 1. Scan extension directory
+ * 2. Load each extension
+ * 3. Validate extension format
+ * 4. Initialize extension
+ *
+ * @validation
+ * - Extension format
+ * - Required methods
+ * - Method signatures
+ * - Extension metadata
+ *
+ * @error-handling
+ * - Invalid extension format
+ * - Missing required methods
+ * - Initialization failures
+ */
 export async function loadExtensions(extensionPath: string | undefined = undefined): Promise<Map<string, Extension>> {
   const extensions: Map<string, Extension> = new Map()
 
