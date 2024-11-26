@@ -264,7 +264,7 @@ ${" ".repeat(indent - 2)}}`
       return String(value)
     }
 
-    return `import { ExtensionSchema } from "@arifwidianto/rpc-agent/interfaces"
+    return `import { ExtensionSchema } from "@arifwidianto/rpc-agent"
 
 export const schema: ExtensionSchema = ${formatValue(schema)}
 `
