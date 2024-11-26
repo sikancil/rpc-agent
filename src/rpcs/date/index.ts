@@ -1,10 +1,4 @@
-import {
-  Extension,
-  ExtensionConfig,
-  ExtensionMetadata,
-  ExtensionStatus,
-  ExtensionMethod,
-} from "../../interfaces/extension.interface"
+import { Extension, ExtensionConfig, ExtensionMetadata, ExtensionStatus, ExtensionMethod } from "../../interfaces"
 import { DateParseArguments, DateNowResponse, DateParseResponse } from "./interfaces"
 
 export default class DateExtension implements Extension {

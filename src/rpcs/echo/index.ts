@@ -1,10 +1,4 @@
-import {
-  Extension,
-  ExtensionConfig,
-  ExtensionMetadata,
-  ExtensionStatus,
-  ExtensionMethod,
-} from "../../interfaces/extension.interface"
+import { Extension, ExtensionConfig, ExtensionMetadata, ExtensionStatus, ExtensionMethod } from "../../interfaces"
 import { ErrorService } from "../../services/error.service"
 import { EchoArguments, EchoResponse, PingResponse } from "./interfaces"
 
