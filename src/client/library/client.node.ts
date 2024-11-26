@@ -2,7 +2,13 @@ import * as net from "node:net"
 import * as dgram from "node:dgram"
 
 import { RpcClientConfig, JsonRpcRequest, JsonRpcResponse } from "./interfaces"
-import { ExtensionStatus, PortValidationResult, SystemInfo, DateInfo, EchoResponse } from "./interfaces"
+import {
+  AgentExtensionStatus,
+  AgentPortValidationResult,
+  AgentSystemInfo,
+  AgentDateInfo,
+  AgentEchoResponse,
+} from "./interfaces"
 
 export class RpcClient {
   private availableExtensions: Set<string> = new Set(["echo"])
@@ -300,24 +306,24 @@ export class AgentLibrary extends RpcClient {
     super(config, debug)
   }
 
-  async getServerInfo(): Promise<SystemInfo> {
-    return this.send<SystemInfo>("server.system", {})
+  async getServerInfo(): Promise<AgentSystemInfo> {
+    return this.send<AgentSystemInfo>("server.system", {})
   }
 
-  async listExtensions(): Promise<ExtensionStatus[]> {
-    const extensions = await this.send<ExtensionStatus[]>("extensions.list", {})
+  async listExtensions(): Promise<AgentExtensionStatus[]> {
+    const extensions = await this.send<AgentExtensionStatus[]>("extensions.list", {})
     return extensions || []
   }
 
-  async validatePort(port: number, type: "TCP" | "UDP"): Promise<PortValidationResult> {
-    return this.send<PortValidationResult>("network.validatePort", { port, type })
+  async validatePort(port: number, type: "TCP" | "UDP"): Promise<AgentPortValidationResult> {
+    return this.send<AgentPortValidationResult>("network.validatePort", { port, type })
   }
 
-  async echo(message: string): Promise<EchoResponse> {
-    return this.send<EchoResponse>("echo.echo", { message })
+  async echo(message: string): Promise<AgentEchoResponse> {
+    return this.send<AgentEchoResponse>("echo.echo", { message })
   }
 
-  async getCurrentDate(): Promise<DateInfo> {
-    return this.send<DateInfo>("date.now", {})
+  async getCurrentDate(): Promise<AgentDateInfo> {
+    return this.send<AgentDateInfo>("date.now", {})
   }
 }

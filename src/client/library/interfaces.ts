@@ -23,26 +23,26 @@ export interface JsonRpcResponse {
   id: string | number | null
 }
 
-export interface ExtensionStatus {
+export interface AgentExtensionStatus {
   name: string
   status: string
   metadata?: Record<string, unknown>
 }
 
-export interface ExtensionListResponse {
+export interface AgentExtensionListResponse {
   result: {
-    extensions: ExtensionStatus[]
+    extensions: AgentExtensionStatus[]
     total: number
   }
 }
 
-export interface PortValidationResult {
+export interface AgentPortValidationResult {
   valid: boolean
   port: number
   type: string
 }
 
-export interface SystemInfo {
+export interface AgentSystemInfo {
   hostname: string
   platform: string
   arch: string
@@ -66,7 +66,7 @@ export interface SystemInfo {
   loadavg: number[]
 }
 
-export interface DateInfo {
+export interface AgentDateInfo {
   timestamp: string
   unix: number
   utc: string
@@ -74,7 +74,7 @@ export interface DateInfo {
   timezone: string
 }
 
-export interface EchoResponse {
+export interface AgentEchoResponse {
   message: string
   timestamp: string
 }

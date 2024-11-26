@@ -1,13 +1,20 @@
 import { AgentLibrary } from "../../library/client.node"
-import { EchoResponse, DateInfo, SystemInfo, ExtensionStatus, PortValidationResult } from "../../library/interfaces"
+import {
+  AgentEchoResponse,
+  AgentDateInfo,
+  AgentSystemInfo,
+  AgentExtensionStatus,
+  AgentPortValidationResult,
+} from "../../library/interfaces"
 
 async function makeRandomRequest(client: AgentLibrary): Promise<void> {
   const methods = [
-    async (): Promise<EchoResponse> => await client.echo("Hello RPC!"),
-    async (): Promise<DateInfo> => await client.getCurrentDate(),
-    async (): Promise<SystemInfo> => await client.getServerInfo(),
-    async (): Promise<ExtensionStatus[]> => await client.listExtensions(),
-    async (): Promise<PortValidationResult> => await client.validatePort(8080, Math.random() > 0.5 ? "TCP" : "UDP"),
+    async (): Promise<AgentEchoResponse> => await client.echo("Hello RPC!"),
+    async (): Promise<AgentDateInfo> => await client.getCurrentDate(),
+    async (): Promise<AgentSystemInfo> => await client.getServerInfo(),
+    async (): Promise<AgentExtensionStatus[]> => await client.listExtensions(),
+    async (): Promise<AgentPortValidationResult> =>
+      await client.validatePort(8080, Math.random() > 0.5 ? "TCP" : "UDP"),
   ]
 
   const randomMethod = methods[Math.floor(Math.random() * methods.length)]
