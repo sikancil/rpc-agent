@@ -1,3 +1,8 @@
+/**
+ * Core RPC Service for handling remote procedure calls over TCP and UDP
+ * @packageDocumentation
+ */
+
 import * as TCPServer from "node:net"
 import * as UDPServer from "node:dgram"
 import { createServer as createTCPServer } from "node:net"
@@ -7,12 +12,43 @@ import { logger } from "../utils/logger"
 import { loadExtensions } from "../utils/extension-loader"
 import { RpcError, ErrorService } from "./error.service"
 
+/**
+ * RPC Service - Core service for handling RPC communications
+ * @class RPCService
+ *
+ * @description
+ * Manages RPC (Remote Procedure Call) communications over TCP and UDP protocols.
+ * Handles extension loading, method invocation, and protocol-specific implementations.
+ *
+ * @example
+ * ```typescript
+ * const rpcService = new RPCService()
+ * await rpcService.initialize()
+ * ```
+ *
+ * @architecture
+ * - TCP Server: Reliable, connection-oriented communication
+ * - UDP Server: Fast, connectionless communication
+ * - Extension System: Pluggable RPC method implementations
+ * - Dynamic Method Resolution: Runtime method discovery and invocation
+ */
 export class RPCService {
   private tcpServer: TCPServer.Server | null = null
   private udpServer: UDPServer.Socket | null = null
   private extensions: Map<string, Extension> = new Map()
   private initialized: boolean = false
 
+  /**
+   * Creates a new RPC Service instance
+   * @param extensionPath - Optional path to load extensions from
+   * @param tcpPort - TCP port number (default: 9101)
+   * @param udpPort - UDP port number (default: 9102)
+   *
+   * @tips
+   * - Use different ports for TCP and UDP
+   * - Ensure ports are available before starting
+   * - Consider security implications of port choices
+   */
   constructor(
     private readonly extensionPath: string | undefined,
     private readonly tcpPort: number = 9101,
@@ -20,6 +56,26 @@ export class RPCService {
     private readonly host: string = "127.0.0.1",
   ) {}
 
+  /**
+   * Initialize the RPC service
+   * @returns Promise<{tcp: boolean, udp: boolean}> - Status of TCP and UDP servers
+   *
+   * @workflow
+   * 1. Load extensions from specified path
+   * 2. Initialize TCP server
+   * 3. Initialize UDP server
+   * 4. Register extension methods
+   *
+   * @integration
+   * - Works with ExtensionLoader for dynamic loading
+   * - Integrates with both TCP and UDP protocols
+   * - Supports multiple concurrent clients
+   *
+   * @error-handling
+   * - Graceful server initialization failures
+   * - Extension loading error recovery
+   * - Port binding conflict resolution
+   */
   async initialize(): Promise<{ tcp: boolean; udp: boolean }> {
     if (this.initialized) {
       return { tcp: !!this.tcpServer, udp: !!this.udpServer }
@@ -44,6 +100,26 @@ export class RPCService {
     }
   }
 
+  /**
+   * Load and register extensions
+   * @returns Promise<void>
+   *
+   * @workflow
+   * 1. Load extensions from path
+   * 2. Validate extension format
+   * 3. Register extension methods
+   * 4. Initialize extension state
+   *
+   * @integration
+   * - Uses ExtensionLoader
+   * - Supports dynamic loading
+   * - Validates extension interfaces
+   *
+   * @error-handling
+   * - Invalid extension format
+   * - Method registration conflicts
+   * - Extension initialization failures
+   */
   private async loadExtensions(): Promise<void> {
     try {
       const extensionsMap = await loadExtensions(this.extensionPath)
@@ -73,42 +149,38 @@ export class RPCService {
     }
   }
 
-  private registerExtension(extension: Extension): number {
-    const { name, methods } = extension
-
-    if (!name || !methods || typeof methods !== "object") {
-      logger.warning(`Invalid extension format: ${name}`)
-      return 0
-    }
-
-    if (this.extensions.has(name)) {
-      logger.warning(`Extension '${name}' is already registered`)
-      return 0
-    }
-
-    this.extensions.set(name, extension)
-    let methodCount = 0
-
-    // Register each method
-    for (const [methodName, method] of Object.entries(methods)) {
-      if (typeof method !== "function") {
-        logger.warning(`Skipping invalid method ${name}.${methodName}: not a function`)
-        continue
-      }
-
-      const fullMethodName = `${name}.${methodName}`
-      logger.debug(`Registered RPC method: ${fullMethodName}`, {
-        extension: name,
-        method: methodName,
-        hasSchema: "schema" in method,
-      })
-      methodCount++
-    }
-
-    logger.info(`Registered extension: ${name} with ${methodCount} methods`)
-    return methodCount
-  }
-
+  /**
+   * Create standardized error response
+   * @param id - Request ID
+   * @param code - Error code
+   * @param message - Error message
+   * @param details - Optional error details
+   * @returns RpcResponse - Formatted error response
+   *
+   * @error-codes
+   * - -32700: Parse error
+   * - -32600: Invalid request
+   * - -32601: Method not found
+   * - -32602: Invalid params
+   * - -32603: Internal error
+   *
+   * @format
+   * {
+   *   jsonrpc: "2.0",
+   *   id: string | number | null,
+   *   error: {
+   *     code: number,
+   *     message: string,
+   *     details?: object
+   *   }
+   * }
+   *
+   * @best-practices
+   * - Use standard error codes when possible
+   * - Include helpful error messages
+   * - Add context in details
+   * - Sanitize sensitive information
+   */
   private createErrorResponse(
     id: string | number | null,
     code: ErrorCode,
@@ -129,6 +201,35 @@ export class RPCService {
     }
   }
 
+  /**
+   * Handle incoming RPC request
+   * @param request - RPC request object
+   * @returns Promise<RpcResponse> - RPC response
+   *
+   * @workflow
+   * 1. Validate request format
+   * 2. Parse method and parameters
+   * 3. Execute requested method
+   * 4. Handle errors and responses
+   *
+   * @validation
+   * - JSON-RPC 2.0 format
+   * - Required fields presence
+   * - Method existence
+   * - Parameter types
+   *
+   * @error-handling
+   * - Invalid request format (-32600)
+   * - Method not found (-32601)
+   * - Invalid parameters (-32602)
+   * - Internal errors (-32603)
+   * - Custom error codes
+   *
+   * @performance
+   * - Async execution
+   * - Error recovery
+   * - Resource cleanup
+   */
   private async handleRequest(request: RpcRequest): Promise<RpcResponse> {
     const { id, method, params = {} } = request
     const traceId = logger.startTrace("Handling RPC request", { method, id })
@@ -223,6 +324,26 @@ export class RPCService {
     }
   }
 
+  /**
+   * Initialize TCP server
+   * @returns Promise<boolean> - Server initialization status
+   *
+   * @workflow
+   * 1. Create TCP server
+   * 2. Set up event handlers
+   * 3. Bind to specified port
+   * 4. Handle incoming connections
+   *
+   * @integration
+   * - Supports JSON-RPC protocol
+   * - Handles multiple client connections
+   * - Provides reliable delivery
+   *
+   * @error-handling
+   * - Connection errors
+   * - Data parsing errors
+   * - Client disconnections
+   */
   private async initializeTCPServer(): Promise<boolean> {
     return new Promise((resolve) => {
       try {
@@ -386,8 +507,28 @@ export class RPCService {
     })
   }
 
+  /**
+   * Initialize UDP server
+   * @returns Promise<boolean> - Server initialization status
+   *
+   * @workflow
+   * 1. Create UDP socket
+   * 2. Set up message handlers
+   * 3. Bind to specified port
+   * 4. Handle incoming datagrams
+   *
+   * @integration
+   * - Supports JSON-RPC protocol
+   * - Handles connectionless communication
+   * - Provides fast message delivery
+   *
+   * @performance
+   * - Low latency
+   * - No connection overhead
+   * - Suitable for real-time data
+   */
   private async initializeUDPServer(): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
+    return new Promise((resolve) => {
       try {
         this.udpServer = createUDPServer("udp4")
 
@@ -487,6 +628,24 @@ export class RPCService {
     })
   }
 
+  /**
+   * Send UDP response
+   * @param response - RPC response object
+   * @param rinfo - Remote info
+   * @param traceId - Trace ID
+   *
+   * @workflow
+   * 1. Serialize response to JSON
+   * 2. Send response over UDP
+   *
+   * @integration
+   * - Works with UDP protocol
+   * - Supports JSON-RPC responses
+   *
+   * @error-handling
+   * - Serialization errors
+   * - UDP send errors
+   */
   private sendUDPResponse(response: RpcResponse, rinfo: UDPServer.RemoteInfo, traceId: string): void {
     if (this.udpServer) {
       const responseStr = JSON.stringify(response) + "\n"
@@ -509,6 +668,22 @@ export class RPCService {
     }
   }
 
+  /**
+   * Cleanup socket
+   * @param socket - TCP socket
+   *
+   * @workflow
+   * 1. End socket
+   * 2. Destroy socket
+   *
+   * @integration
+   * - Works with TCP protocol
+   * - Supports socket cleanup
+   *
+   * @error-handling
+   * - Socket end errors
+   * - Socket destroy errors
+   */
   private cleanupSocket(socket: TCPServer.Socket): void {
     if (!socket.destroyed) {
       socket.end()
@@ -516,6 +691,25 @@ export class RPCService {
     }
   }
 
+  /**
+   * Send TCP response
+   * @param socket - TCP socket
+   * @param response - RPC response object
+   * @param clientId - Client ID
+   * @param traceId - Trace ID
+   *
+   * @workflow
+   * 1. Serialize response to JSON
+   * 2. Send response over TCP
+   *
+   * @integration
+   * - Works with TCP protocol
+   * - Supports JSON-RPC responses
+   *
+   * @error-handling
+   * - Serialization errors
+   * - TCP send errors
+   */
   private sendTCPResponse(socket: TCPServer.Socket, response: RpcResponse, clientId: string, traceId: string): void {
     if (!socket.destroyed) {
       const responseStr = JSON.stringify(response) + "\n"
@@ -538,6 +732,26 @@ export class RPCService {
     }
   }
 
+  /**
+   * Shutdown RPC service
+   * @returns Promise<void>
+   *
+   * @workflow
+   * 1. Close TCP server
+   * 2. Close UDP socket
+   * 3. Cleanup extensions
+   * 4. Release resources
+   *
+   * @integration
+   * - Graceful connection termination
+   * - Resource cleanup
+   * - State persistence if needed
+   *
+   * @error-handling
+   * - Server close failures
+   * - Resource cleanup errors
+   * - Extension shutdown errors
+   */
   async shutdown(): Promise<void> {
     logger.info("Shutting down RPC service")
 
