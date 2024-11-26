@@ -50,3 +50,21 @@ export interface ErrorDetails {
   source?: string
   requestId?: string | number | null
 }
+
+/**
+ * RPC Error Interface
+ * @interface RpcErrorParams
+ *
+ * @property code - Error code
+ * @property message - Error message
+ * @property details - Optional error details
+ * @property requestId - Associated request ID
+ * @property source - Error source
+ */
+export interface RpcErrorParams {
+  code: ErrorCode
+  message: string
+  details?: Record<string, JSONValue>
+  requestId?: string | number | null
+  source?: string
+}
