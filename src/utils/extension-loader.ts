@@ -62,6 +62,7 @@ export async function loadExtensions(extensionPath: string | undefined = undefin
       const baseIndexFile = path.join(extensionPath || `${__dirname}/../../`, `index${baseFileExtension}`)
       const userIndexFile = extensionsDirUser
         ? path.join(
+            // extensionPath ? path.resolve(process.cwd(), extensionsDirUser || "") : process.cwd(),
             extensionPath?.includes(extensionsDirUser)
               ? extensionPath
               : path.resolve(process.cwd(), extensionsDirUser || ""),
