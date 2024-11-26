@@ -30,7 +30,7 @@
     "precommit": "npm run format ; npm run lint",
     "x-prepack": "npm run build",
     "x-postinstall": "npm run build",
-    "postbuild": "echo \"🎉 Build successful!\""
+    "postbuild": "npm run chmod:bin ; echo \"\n\" ; echo \"🎉 Build successful!\""
   },
   "keywords": [
     "typescript",
