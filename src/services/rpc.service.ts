@@ -752,29 +752,81 @@ export class RPCService {
    * - Resource cleanup errors
    * - Extension shutdown errors
    */
-  async shutdown(): Promise<void> {
+  async shutdown(timeoutMs: number = 5000): Promise<void> {
     logger.info("Shutting down RPC service")
 
-    if (this.tcpServer) {
-      await new Promise<void>((resolve) => {
-        this.tcpServer?.close(() => {
-          logger.info("TCP server closed")
-          resolve()
-        })
+    try {
+      await new Promise<boolean>((resolve, reject) => {
+        const tcpShutdown = {
+          done: false,
+          waiting: false,
+        }
+        const udpShutdown = {
+          done: false,
+          waiting: false,
+        }
+        let _n: number = 0
+        let _to: NodeJS.Timeout | undefined = setTimeout(() => {
+          // clearInterval(ti)
+          if (!tcpShutdown.done && !tcpShutdown.waiting) {
+            this.tcpServer?.close(() => {
+              logger.info("TCP server closed")
+              tcpShutdown.done = true
+              tcpShutdown.waiting = false
+            })
+          }
+          if (!udpShutdown.done && !udpShutdown.waiting) {
+            this.udpServer?.close(() => {
+              logger.info("UDP server closed")
+              udpShutdown.done = true
+              udpShutdown.waiting = false
+            })
+          }
+
+          if (tcpShutdown.done && !tcpShutdown.waiting && udpShutdown.done && !udpShutdown.waiting) {
+            clearTimeout(_to)
+            _to = undefined
+            resolve(true)
+          }
+          
+          _n++
+          if (_n >= 5) {
+            clearTimeout(_to)
+            _to = undefined
+            reject(new Error("Shutdown timeout"))
+          }
+        }, timeoutMs)
       })
+
+      this.initialized = false
+      this.tcpServer = null
+      this.udpServer = null
+
+      process.exit(0)
+    } catch (error) {
+      logger.error("Shutdown failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      process.exit(1)
     }
 
-    if (this.udpServer) {
-      await new Promise<void>((resolve) => {
-        this.udpServer?.close(() => {
-          logger.info("UDP server closed")
-          resolve()
-        })
-      })
-    }
+    // if (this.tcpServer) {
+    //   await new Promise<void>((resolve) => {
+    //     this.tcpServer?.close(() => {
+    //       logger.info("TCP server closed")
+    //       resolve()
+    //     })
+    //   })
+    // }
 
-    this.initialized = false
-    this.tcpServer = null
-    this.udpServer = null
+    // if (this.udpServer) {
+    //   await new Promise<void>((resolve) => {
+    //     this.udpServer?.close(() => {
+    //       logger.info("UDP server closed")
+    //       resolve()
+    //     })
+    //   })
+    // }
   }
 }
