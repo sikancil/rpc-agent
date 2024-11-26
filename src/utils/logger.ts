@@ -1,20 +1,6 @@
 // Logger implementation for the RPC Agent
 
-export enum LogLevel {
-  ERROR = "error",
-  WARNING = "warning",
-  INFO = "info",
-  DEBUG = "debug",
-  VERBOSE = "verbose",
-}
-
-interface LogMetadata {
-  level?: LogLevel
-  format?: "simple" | "detailed"
-  traceId?: string
-  duration?: string
-  [key: string]: unknown
-}
+import { LogLevel, LogMetadata } from "../interfaces"
 
 export class Logger {
   private readonly logLevel: LogLevel

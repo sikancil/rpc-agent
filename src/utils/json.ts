@@ -1,6 +1,6 @@
 // utils.ts
 import { logger } from "./logger"
-import { JSONValue } from "../interfaces/common.interface"
+import { JSONValue } from "../interfaces"
 
 export function parseJSON(str: string): JSONValue {
   try {

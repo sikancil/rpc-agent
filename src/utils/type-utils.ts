@@ -1,5 +1,4 @@
-import { RpcRequest, RpcResponse } from "../interfaces/rpc.interface"
-import { JSONValue } from "../interfaces/common.interface"
+import { RpcRequest, RpcResponse, JSONValue } from "../interfaces"
 
 /**
  * Type guard for checking if a value is an object

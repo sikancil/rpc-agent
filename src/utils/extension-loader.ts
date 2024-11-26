@@ -1,13 +1,16 @@
 import fs, { promises as fsPromises } from "node:fs"
 import * as path from "node:path"
-import { Extension } from "../interfaces/extension.interface"
 import { logger } from "./logger"
+import { Extension } from "../interfaces"
 
 export async function loadExtensions(extensionPath: string | undefined = undefined): Promise<Map<string, Extension>> {
   const extensions: Map<string, Extension> = new Map()
+
   // Use src/rpcs in development mode with ts-node, dist/rpcs in production
-  const isDevelopment = process.argv.some((arg) => arg.includes("ts-node"))
-  const extensionsDirBase = path.join(process.cwd(), isDevelopment ? "src" : "dist", "rpcs")
+  const isUserDevelopment = process.argv.some((arg) => arg.includes("ts-node"))
+  const isDevelopment = __filename.endsWith(".ts")
+
+  const extensionsDirBase = path.join(__dirname, "../../", isDevelopment ? "src" : "dist", "rpcs")
   const extensionsDirUser = extensionPath ? path.join(process.cwd(), extensionPath || "rpcs") : undefined
   logger.debug(`Loading extensions from ${extensionsDirBase}`, { isDevelopment })
   logger.debug(`Loading extensions from ${extensionsDirUser}`, { isDevelopment })
@@ -15,15 +18,11 @@ export async function loadExtensions(extensionPath: string | undefined = undefin
   try {
     const entriesBase = await fsPromises.readdir(extensionsDirBase, { withFileTypes: true })
     const entriesUser = extensionsDirUser ? await fsPromises.readdir(extensionsDirUser, { withFileTypes: true }) : []
-    const entries = [
-      ...entriesBase, //.map((entry) => path.join(extensionsDirBase, entry.name)),
-      ...entriesUser, //.map((entry) => path.join(extensionsDirUser, entry.name)),
-    ]
+    const entries = [...entriesBase, ...entriesUser]
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
 
-      // const extensionPath = path.join(extensionsDirBase, entry.name)
       const extensionPath = entriesBase.find((e) => e.name === entry.name)?.name
         ? path.join(extensionsDirBase, entry.name)
         : extensionsDirUser
@@ -31,7 +30,19 @@ export async function loadExtensions(extensionPath: string | undefined = undefin
           : undefined
 
       // Use .ts extension during development mode, .js for built mode
-      const indexFile = extensionPath ? path.join(extensionPath, `index${isDevelopment ? ".ts" : ".js"}`) : undefined
+      const baseFileExtension = isDevelopment ? ".ts" : ".js"
+      const userFileExtension = isUserDevelopment ? ".ts" : ".js"
+      const baseIndexFile = path.join(extensionPath || `${__dirname}/../../`, `index${baseFileExtension}`)
+      const userIndexFile = extensionsDirUser
+        ? path.join(
+            extensionPath?.includes(extensionsDirUser)
+              ? extensionPath
+              : path.resolve(process.cwd(), extensionsDirUser || ""),
+            `index${userFileExtension}`,
+          )
+        : undefined
+
+      const indexFile = entriesBase.find((e) => e.name === entry.name)?.name ? baseIndexFile : userIndexFile
       logger.debug(`Checking extension file: ${indexFile}`)
 
       if (!indexFile || !fs.existsSync(indexFile)) {
