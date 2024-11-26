@@ -99,9 +99,6 @@ class AgentClient {
   }
 }
 
-// Export for testing
-export { AgentService, AgentClient }
-
 // If executed directly, run the service
 if (require.main === module) {
   async function listen(extensionsPath: string | undefined = undefined): Promise<void> {
@@ -129,3 +126,6 @@ if (require.main === module) {
     process.exit(1)
   })
 }
+
+// Export Packages
+export { AgentService, AgentClient }
