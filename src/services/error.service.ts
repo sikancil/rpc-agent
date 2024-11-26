@@ -1,5 +1,4 @@
-import { ErrorCode, ErrorDetails } from "../interfaces/error.interface"
-import { JSONValue } from "../interfaces/common.interface"
+import { ErrorCode, ErrorDetails, JSONValue } from "../interfaces"
 
 export class RpcError extends Error {
   readonly code: ErrorCode

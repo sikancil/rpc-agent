@@ -2,12 +2,9 @@ import * as TCPServer from "node:net"
 import * as UDPServer from "node:dgram"
 import { createServer as createTCPServer } from "node:net"
 import { createSocket as createUDPServer } from "node:dgram"
-import { JSONValue } from "../interfaces/common.interface"
-import { Extension } from "../interfaces/extension.interface"
-import { RpcRequest, RpcResponse } from "../interfaces/rpc.interface"
+import { ErrorCode, RpcRequest, RpcResponse, Extension, JSONValue } from "../interfaces"
 import { logger } from "../utils/logger"
 import { loadExtensions } from "../utils/extension-loader"
-import { ErrorCode } from "../interfaces/error.interface"
 import { RpcError, ErrorService } from "./error.service"
 
 export class RPCService {
@@ -267,7 +264,7 @@ export class RPCService {
           // Handle socket timeout
           socket.on("timeout", () => {
             logger.warning("TCP socket timeout", { clientId })
-            this.cleanupSocket(socket /* clientId */)
+            this.cleanupSocket(socket)
           })
 
           let buffer = Buffer.alloc(0)
@@ -513,14 +510,6 @@ export class RPCService {
   }
 
   private cleanupSocket(socket: TCPServer.Socket): void {
-    // Clean up any pending requests for this client
-    // for (const [queueId, { reject }] of this.requestQueue.entries()) {
-    //   if (queueId.startsWith(clientId)) {
-    //     reject(new Error("Connection closed"))
-    //     this.requestQueue.delete(queueId)
-    //   }
-    // }
-
     if (!socket.destroyed) {
       socket.end()
       socket.destroy()
