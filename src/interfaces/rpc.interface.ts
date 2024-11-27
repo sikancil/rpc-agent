@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ErrorCode, ErrorDetails } from "./error.interface"
 
 // Base RPC Message
@@ -23,8 +24,18 @@ export interface RpcResponse extends RpcMessageBase {
 }
 
 // RPC Method Type
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RpcMethod = (params: any) => Promise<unknown> | void | undefined
+export type RpcMethod = (
+  param?: any,
+) =>
+  | Promise<any>
+  | Promise<any[]>
+  | Promise<Map<string, any>>
+  | Promise<void>
+  | any
+  | any[]
+  | Map<string, any>
+  | void
+  | undefined
 
 // RPC Method Schema
 export interface RpcMethodSchema {

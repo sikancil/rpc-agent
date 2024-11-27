@@ -248,7 +248,7 @@ export class RPCService {
       }
 
       // Get method
-      const methodHandler = extension.methods[methodName]
+      const methodHandler = extension.methods[methodName]?.bind(extension)
       if (!methodHandler) {
         throw ErrorService.methodNotFound(`Method '${methodName}' not found in extension '${extensionName}'`)
       }
@@ -508,6 +508,70 @@ export class RPCService {
   }
 
   /**
+   * Cleanup socket
+   * @param socket - TCP socket
+   *
+   * @workflow
+   * 1. End socket
+   * 2. Destroy socket
+   *
+   * @integration
+   * - Works with TCP protocol
+   * - Supports socket cleanup
+   *
+   * @error-handling
+   * - Socket end errors
+   * - Socket destroy errors
+   */
+  private cleanupSocket(socket: TCPServer.Socket): void {
+    if (!socket.destroyed) {
+      socket.end()
+      socket.destroy()
+    }
+  }
+
+  /**
+   * Send TCP response
+   * @param socket - TCP socket
+   * @param response - RPC response object
+   * @param clientId - Client ID
+   * @param traceId - Trace ID
+   *
+   * @workflow
+   * 1. Serialize response to JSON
+   * 2. Send response over TCP
+   *
+   * @integration
+   * - Works with TCP protocol
+   * - Supports JSON-RPC responses
+   *
+   * @error-handling
+   * - Serialization errors
+   * - TCP send errors
+   */
+  private sendTCPResponse(socket: TCPServer.Socket, response: RpcResponse, clientId: string, traceId: string): void {
+    if (!socket.destroyed) {
+      const responseStr = JSON.stringify(response) + "\n"
+      socket.write(responseStr, (error) => {
+        if (error) {
+          logger.error("Failed to send TCP response", {
+            clientId,
+            traceId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+        } else {
+          logger.debug("TCP response sent successfully", {
+            clientId,
+            traceId,
+            size: responseStr.length,
+          })
+        }
+      })
+    }
+  }
+
+  /**
    * Initialize UDP server
    * @returns Promise<boolean> - Server initialization status
    *
@@ -660,70 +724,6 @@ export class RPCService {
         } else {
           logger.debug("UDP response sent successfully", {
             clientId: `${rinfo.address}:${rinfo.port}`,
-            traceId,
-            size: responseStr.length,
-          })
-        }
-      })
-    }
-  }
-
-  /**
-   * Cleanup socket
-   * @param socket - TCP socket
-   *
-   * @workflow
-   * 1. End socket
-   * 2. Destroy socket
-   *
-   * @integration
-   * - Works with TCP protocol
-   * - Supports socket cleanup
-   *
-   * @error-handling
-   * - Socket end errors
-   * - Socket destroy errors
-   */
-  private cleanupSocket(socket: TCPServer.Socket): void {
-    if (!socket.destroyed) {
-      socket.end()
-      socket.destroy()
-    }
-  }
-
-  /**
-   * Send TCP response
-   * @param socket - TCP socket
-   * @param response - RPC response object
-   * @param clientId - Client ID
-   * @param traceId - Trace ID
-   *
-   * @workflow
-   * 1. Serialize response to JSON
-   * 2. Send response over TCP
-   *
-   * @integration
-   * - Works with TCP protocol
-   * - Supports JSON-RPC responses
-   *
-   * @error-handling
-   * - Serialization errors
-   * - TCP send errors
-   */
-  private sendTCPResponse(socket: TCPServer.Socket, response: RpcResponse, clientId: string, traceId: string): void {
-    if (!socket.destroyed) {
-      const responseStr = JSON.stringify(response) + "\n"
-      socket.write(responseStr, (error) => {
-        if (error) {
-          logger.error("Failed to send TCP response", {
-            clientId,
-            traceId,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          })
-        } else {
-          logger.debug("TCP response sent successfully", {
-            clientId,
             traceId,
             size: responseStr.length,
           })
