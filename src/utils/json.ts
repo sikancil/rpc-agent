@@ -22,9 +22,11 @@ import { JSONValue } from "../interfaces"
  * - Handle potential errors when calling this function
  */
 export function parseJSON(str: string): JSONValue {
+  if (!str) return undefined
+  if (str?.trim()?.replace(/^\s+|\s+$/g, "")?.length === 0) return undefined
   try {
     // Log verbose information about parsing attempt
-    logger.verbose("Parsing JSON data", { size: str.length })
+    logger.verbose("Parsing JSON data", { size: str?.length })
 
     // Attempt to parse the JSON string
     const result = JSON.parse(str) as JSONValue
@@ -110,7 +112,7 @@ export function isValidJSON(value: unknown): value is JSONValue {
   try {
     // Attempt to stringify the value
     // If successful, it's a valid JSON value
-    JSON.stringify(value)
+    JSON.parse(JSON.stringify(value))
     return true
   } catch {
     // If stringification fails, it's not a valid JSON value
@@ -118,11 +120,12 @@ export function isValidJSON(value: unknown): value is JSONValue {
   }
 }
 
-export function safeJSONParse<T extends JSONValue = JSONValue>(value: string): T {
+export function safeJSONParse<T extends JSONValue = JSONValue>(value: string, returnInvalid?: T): T {
   try {
     return JSON.parse(value) as T
   } catch {
-    return value as T
+    // return value as T
+    return returnInvalid ? (returnInvalid as T) : (value as T)
   }
 }
 
@@ -144,13 +147,16 @@ export function safeJSONParse<T extends JSONValue = JSONValue>(value: string): T
  * - Handles non-serializable values by falling back to String() conversion
  * - Useful for logging or displaying JSON data safely
  */
-export function safeJSONString(value: JSONValue): string {
+export function safeJSONString<T extends JSONValue = JSONValue>(value: JSONValue, returnInvalid?: T): string {
   try {
+    if (!isValidJSON(value)) {
+      throw new Error("Value is not a valid JSON value")
+    }
     // Attempt to stringify the JSON value
     return JSON.stringify(value)
   } catch {
     // If stringification fails, fall back to string conversion
-    return String(value)
+    return returnInvalid ? String(returnInvalid) : String(value)
   }
 }
 
