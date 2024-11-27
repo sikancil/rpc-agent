@@ -61,7 +61,8 @@ class AgentService {
     logger.info("Shutting down RPC Agent Service")
 
     try {
-      await this.rpcService.shutdown()
+      // Gracefully close the RPC service with a timeout of 3 seconds
+      await this.rpcService.shutdown(3000)
       logger.info("RPC Agent Service shutdown complete")
       process.exit(0)
     } catch (error) {
